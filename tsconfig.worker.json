@@ -1,10 +1,10 @@
 {
-  // Worker + Durable Object. Follows imports into src/core, src/shared and
-  // game logic, so any DOM use there fails this check.
+  // Worker + Durable Object, plus everything that must run on the server
+  // (core, shared, game logic via registry.server) checked without the DOM lib.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022"],
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/server"]
+  "include": ["src/server", "src/core", "src/shared", "src/games/registry.server.ts"]
 }
