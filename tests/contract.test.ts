@@ -46,6 +46,8 @@ for (const [id, def] of Object.entries(serverGames)) {
             const report = simulateGame(def, { players, seed, screen, maxSteps: MAX_STEPS });
             expect(report.result).not.toBeNull();
             expect(report.actions).toBeGreaterThan(0);
+            // A game that ends on timers alone, or lets one player carry it, is not being played.
+            expect(report.actors).toBeGreaterThanOrEqual(Math.min(2, players));
             expect(report.maxViewBytes).toBeLessThanOrEqual(MAX_VIEW_BYTES);
             for (const pid of Object.keys(report.result.scores)) {
               expect(report.playerIds).toContain(pid);
@@ -65,6 +67,31 @@ for (const [id, def] of Object.entries(serverGames)) {
         restoreEvery: 5,
       });
       expect(report.result).not.toBeNull();
+    });
+
+    it('finishes on its own timers when every player is idle (no phase waits forever)', () => {
+      const report = simulateGame(def, {
+        players: def.manifest.minPlayers,
+        seed: 13,
+        screen: def.manifest.screen !== 'none',
+        maxSteps: MAX_STEPS,
+        idleBots: true,
+      });
+      expect(report.result).not.toBeNull();
+      expect(report.actions).toBe(0);
+    });
+
+    it('ignores stale and out-of-turn actions without throwing', () => {
+      for (const seed of SEEDS) {
+        const report = simulateGame(def, {
+          players: Math.min(def.manifest.maxPlayers, Math.max(def.manifest.minPlayers, 4)),
+          seed,
+          screen: def.manifest.screen !== 'none',
+          maxSteps: MAX_STEPS,
+          staleActions: true,
+        });
+        expect(report.result).not.toBeNull();
+      }
     });
 
     it('does not stall when a player leaves mid-game', () => {

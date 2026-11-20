@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createHarness } from '../src/core/testkit';
-import { Room, LEAVE_GRACE_MS, MAX_PLAYERS } from '../src/core/engine';
+import { createHarness, findLeaks, recordViews } from '../src/core/testkit';
+import { Room, LEAVE_GRACE_MS, MAX_ASSETS_MSG_BYTES, MAX_PLAYERS } from '../src/core/engine';
+import type { AnyGame } from '../src/core/game';
+import tapDuel, { type TapState } from '../src/games/_template/logic';
 import { CODE_ALPHABET, generateCode, isValidCode, normalizeCode } from '../src/shared/roomCode';
 import { MAX_MESSAGE_BYTES } from '../src/shared/protocol';
 import { Rng } from '../src/core/rng';
@@ -316,5 +318,79 @@ describe('snapshot / restore', () => {
     expect(h.room.version).toBe(v);
     h.send(host, { type: 'host', cmd: { type: 'start' } });
     expect(h.room.version).toBeGreaterThan(v);
+  });
+});
+
+describe('review fixes (U4)', () => {
+  it('a seat whose socket died during eviction still times out after restore', () => {
+    const { h, host, rest } = hostPlayerRoom(2);
+    h.send(host, { type: 'host', cmd: { type: 'start' } });
+    // Eviction: the socket is gone but no close event ever reached the room.
+    host.closed = true;
+    h.restart();
+    h.clock.advance(LEAVE_GRACE_MS);
+    h.room.fireDueTimers();
+    expect(h.lobby().host).toEqual({ kind: 'player', id: rest[0].id });
+    h.runUntil(() => h.lobby().phase === 'results');
+  });
+
+  it('a game whose setup throws goes back to the lobby instead of a dead game', () => {
+    const broken = { ...tapDuel, setup: () => { throw new Error('boom'); } } as AnyGame;
+    const h = createHarness({ games: { [GAME]: broken }, strict: false });
+    const host = h.join('Host');
+    h.join('P1');
+    h.send(host, { type: 'host', cmd: { type: 'selectGame', gameId: GAME } });
+    h.send(host, { type: 'host', cmd: { type: 'start' } });
+    expect(host.last('error')?.code).toBe('bad_command');
+    expect(h.lobby().phase).toBe('lobby');
+    expect(h.lobby().currentGameId).toBeNull();
+  });
+
+  it('a view that cannot be serialized does not throw out of the engine', () => {
+    const bad = { ...tapDuel, view: () => ({ n: BigInt(1) }) } as AnyGame;
+    const h = createHarness({ games: { [GAME]: bad }, strict: false });
+    const host = h.join('Host');
+    h.join('P1');
+    h.send(host, { type: 'host', cmd: { type: 'selectGame', gameId: GAME } });
+    expect(() => h.send(host, { type: 'host', cmd: { type: 'start' } })).not.toThrow();
+    expect(host.view()).toBeNull();
+  });
+
+  it('asset replies are split under the per-message cap and always answered', () => {
+    const h = createHarness();
+    const c = h.join('Host');
+    const big = 'x'.repeat(100_000);
+    const ids = [1, 2, 3, 4, 5].map((i) => h.room.putAsset({ i, big }));
+    h.send(c, { type: 'assetReq', ids });
+    const msgs = c.all('assets');
+    expect(msgs.length).toBeGreaterThan(1);
+    for (const m of msgs) expect(JSON.stringify(m).length).toBeLessThan(MAX_ASSETS_MSG_BYTES + 120_000);
+    expect(msgs.flatMap((m) => Object.keys(m.items)).sort()).toEqual([...ids].sort());
+    h.send(c, { type: 'assetReq', ids: ['missing'] });
+    expect(c.last('assets')?.items).toEqual({});
+  });
+
+  it('a player who left cannot act until they return', () => {
+    const { h, host, rest } = hostPlayerRoom(2);
+    h.send(host, { type: 'host', cmd: { type: 'start' } });
+    rest[0].disconnect();
+    h.clock.advance(LEAVE_GRACE_MS);
+    h.room.fireDueTimers();
+    expect(h.room.runAction(rest[0].id, { type: 'tap' })).toMatch(/not in a running game/);
+  });
+});
+
+describe('testkit leak helpers', () => {
+  it('recordViews captures every viewer at every phase, findLeaks flags secrets', () => {
+    const { records, report } = recordViews<TapState>(tapDuel, { players: 3, seed: 1, screen: true });
+    const keys = new Set(records.map((r) => r.viewerKey));
+    expect(keys).toEqual(new Set([...report.playerIds, 'screen']));
+    const phases = new Set(records.map((r) => (r.view as { phase: string }).phase));
+    expect(phases).toEqual(new Set(['wait', 'go', 'reveal', 'done']));
+    // Nothing secret in Tap Duel: a lockout is only shown to the locked-out player.
+    expect(findLeaks(records, () => ({ exact: ['p999'], text: ['token-'] }))).toEqual([]);
+    // The helper does find a planted "secret".
+    const p1 = report.playerIds[0];
+    expect(findLeaks(records, (r) => (r.viewerKey === 'screen' ? { exact: [p1], text: ['REVEAL'] } : null)).length).toBeGreaterThan(0);
   });
 });

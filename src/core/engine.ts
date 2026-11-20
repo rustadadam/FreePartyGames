@@ -20,6 +20,8 @@ export const LEAVE_GRACE_MS = 30_000;
 export const BOT_TICK_MS = 600;
 const BOT_JITTER_MS = 600;
 const MAX_TIMER_FIRES_PER_CALL = 1000;
+/** Max serialized size of one outbound `assets` message (the platform caps a WebSocket message at 1 MiB). */
+export const MAX_ASSETS_MSG_BYTES = 256 * 1024;
 
 export const PLAYER_COLORS = [
   '#ff5d5d', '#ffb13b', '#ffe14d', '#7bd85a', '#2ec4b6', '#3fa7ff', '#7a6bff', '#d46bff',
@@ -103,6 +105,8 @@ export class Room {
   private lastLobbyJson = '';
   private readonly assets = new Map<string, unknown>();
   private newAssets: string[] = [];
+  /** Bumped (in memory) whenever the broadcast lobby changes: seats, host, phase, scores. */
+  private lobbyChanges = 0;
   private readonly rng: Rng;
   private readonly gameRng: Rng;
   private readonly botRng: Rng;
@@ -158,11 +162,38 @@ export class Room {
     return structuredClone(this.s);
   }
 
+  /** Counts lobby-level changes (seats, tokens, host, phase, scores). The adapter persists these at once. */
+  get lobbyVersion(): number {
+    return this.lobbyChanges;
+  }
+
   /** Re-binds a socket after hibernation (identity came from the socket attachment). Sends nothing. */
   attach(connId: string, who: ConnIdentity): void {
     if (who.kind === 'player' && !this.seat(who.id)) return;
     if (who.kind === 'screen' && !this.s.screen) return;
     this.conns.set(connId, who);
+  }
+
+  /**
+   * Call once after restore + attach. A seat the snapshot thinks is present but has no socket
+   * (its socket died while the object was evicted, so no close event ever reached us) gets a
+   * leave-grace timer, exactly as if it had just disconnected. Without this, the host never
+   * passes and the game is never told, so it can wait on that player forever.
+   */
+  reconcileConnections(): void {
+    const at = this.deps.now() + LEAVE_GRACE_MS;
+    let changed = false;
+    for (const seat of this.s.seats) {
+      if (seat.isBot || seat.away || this.isConnected(seat.id) || `leave:${seat.id}` in this.s.timers) continue;
+      this.setTimerAt(`leave:${seat.id}`, at);
+      changed = true;
+    }
+    const screen = this.s.screen;
+    if (screen && !screen.away && !this.isConnected('screen') && !('leave:screen' in this.s.timers)) {
+      this.setTimerAt('leave:screen', at);
+      changed = true;
+    }
+    if (changed) this.s.version++;
   }
 
   identity(connId: string): ConnIdentity | null {
@@ -264,15 +295,14 @@ export class Room {
     if (!who) return this.error(connId, 'not_joined', 'Say hello first');
 
     switch (msg.type) {
-      case 'assetReq': {
-        const items: Record<string, unknown> = {};
-        for (const id of msg.ids) if (this.assets.has(id)) items[id] = this.assets.get(id);
-        return this.deps.send(connId, { type: 'assets', items });
-      }
-      case 'action':
+      case 'assetReq':
+        return this.sendAssets(connId, msg.ids);
+      case 'action': {
         if (who.kind !== 'player') return this.error(connId, 'not_in_game', 'Screens cannot act');
-        this.playerAction(connId, who.id, msg.payload);
+        const err = this.playerAction(who.id, msg.payload);
+        if (err) this.error(connId, err.code, err.message);
         return this.commit();
+      }
       case 'host': {
         if (!this.isHost(who)) return this.error(connId, 'not_host', 'Only the host can do that');
         const err = this.runHostCommand(msg.cmd);
@@ -294,6 +324,16 @@ export class Room {
     const key = who.kind === 'screen' ? 'screen' : who.id;
     if (!this.isConnected(key)) this.setTimerAt(`leave:${key}`, this.deps.now() + LEAVE_GRACE_MS);
     this.commit();
+  }
+
+  /**
+   * Runs a game action as `playerId` without a socket: the same phase, seat and actionSchema
+   * checks as a real message. For trusted callers (testkit fuzzing). Returns an error or null.
+   */
+  runAction(playerId: string, payload: unknown): string | null {
+    const err = this.playerAction(playerId, payload);
+    this.commit();
+    return err?.message ?? null;
   }
 
   /**
@@ -512,11 +552,16 @@ export class Room {
     const players: PlayerInfo[] = seats.map(({ id, name, color, isBot }) => ({ id, name, color, isBot }));
     this.s.phase = 'playing';
     this.s.game = { id: def.manifest.id, state: null, playerIds: players.map((p) => p.id), left: [] };
-    this.callGame(() => {
+    const ok = this.callGame(() => {
       this.s.game!.state = def.setup(this.ctx, players, structuredClone(def.defaultSettings));
     });
-    if (seats.some((p) => p.isBot)) this.armBots();
-    this.checkResult();
+    if (!ok) {
+      // A crashed setup leaves no usable state: back to the lobby instead of a dead game.
+      this.endGame();
+      this.s.phase = 'lobby';
+      return 'The game failed to start';
+    }
+    if (this.s.phase === 'playing' && seats.some((p) => p.isBot)) this.armBots();
     return null;
   }
 
@@ -526,16 +571,16 @@ export class Room {
     for (const key of Object.keys(this.s.timers)) if (key.startsWith('g:') || key === 'bot') delete this.s.timers[key];
   }
 
-  private playerAction(connId: string, playerId: string, payload: unknown): void {
+  private playerAction(playerId: string, payload: unknown): { code: ErrorCode; message: string } | null {
     const game = this.s.game;
     const def = this.currentDef();
-    if (!game || !def || this.s.phase !== 'playing' || !game.playerIds.includes(playerId)) {
-      return this.error(connId, 'not_in_game', 'You are not in a running game');
+    if (!game || !def || this.s.phase !== 'playing' || !game.playerIds.includes(playerId) || game.left.includes(playerId)) {
+      return { code: 'not_in_game', message: 'You are not in a running game' };
     }
     const parsed = def.actionSchema.safeParse(payload);
-    if (!parsed.success) return this.error(connId, 'bad_action', 'Invalid action');
+    if (!parsed.success) return { code: 'bad_action', message: 'Invalid action' };
     const ok = this.callGame((d) => d.onAction(game.state, this.ctx, playerId, parsed.data));
-    if (!ok) this.error(connId, 'game_error', 'The game could not handle that');
+    return ok ? null : { code: 'game_error', message: 'The game could not handle that' };
   }
 
   private fireTimer(key: string): void {
@@ -612,8 +657,9 @@ export class Room {
     }
     if (!result) return;
     const scores: Record<string, number> = {};
+    const raw: Record<string, unknown> = result.scores && typeof result.scores === 'object' ? result.scores : {};
     for (const id of game.playerIds) {
-      const pts = Number(result.scores[id] ?? 0);
+      const pts = Number(Object.prototype.hasOwnProperty.call(raw, id) ? raw[id] : 0);
       scores[id] = Number.isFinite(pts) ? pts : 0;
     }
     for (const seat of this.s.seats) seat.score += scores[seat.id] ?? 0;
@@ -653,13 +699,14 @@ export class Room {
     const lobbyJson = JSON.stringify(lobby);
     const lobbyChanged = lobbyJson !== this.lastLobbyJson;
     this.lastLobbyJson = lobbyJson;
+    if (lobbyChanged) this.lobbyChanges++;
     const cache = new Map<string, string>();
     for (const [connId, who] of this.conns) {
       if (lobbyChanged) this.deps.send(connId, { type: 'room', lobby });
       const key = who.kind === 'screen' ? 'screen' : who.id;
       let json = cache.get(key);
       if (json === undefined) {
-        json = JSON.stringify(this.viewFor(who) ?? null);
+        json = this.viewJson(who);
         cache.set(key, json);
       }
       if (this.lastView.get(connId) !== json) {
@@ -667,6 +714,41 @@ export class Room {
         this.deps.send(connId, { type: 'view', gameView: JSON.parse(json) });
       }
     }
+  }
+
+  /** Serialized view; a view that cannot be serialized (cycle, BigInt) becomes null instead of throwing. */
+  private viewJson(who: Viewer): string {
+    try {
+      return JSON.stringify(this.viewFor(who) ?? null);
+    } catch (err) {
+      if (this.deps.strict) throw err;
+      this.deps.log?.('error', 'view could not be serialized', String(err));
+      return 'null';
+    }
+  }
+
+  /** Answers an assetReq, split into messages of at most MAX_ASSETS_MSG_BYTES each. */
+  private sendAssets(connId: string, ids: string[]): void {
+    let items: Record<string, unknown> = {};
+    let bytes = 0;
+    let count = 0;
+    let sent = false;
+    for (const id of new Set(ids)) {
+      if (!this.assets.has(id)) continue;
+      const data = this.assets.get(id);
+      const size = (JSON.stringify(data) ?? '').length + id.length + 4;
+      if (count > 0 && bytes + size > MAX_ASSETS_MSG_BYTES) {
+        this.deps.send(connId, { type: 'assets', items });
+        sent = true;
+        items = {};
+        bytes = 0;
+        count = 0;
+      }
+      items[id] = data;
+      bytes += size;
+      count++;
+    }
+    if (count > 0 || !sent) this.deps.send(connId, { type: 'assets', items });
   }
 
   private viewFor(who: Viewer): unknown {
