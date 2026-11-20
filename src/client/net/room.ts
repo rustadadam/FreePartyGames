@@ -5,7 +5,7 @@ import type { ClientMsgInput, ErrorCode, HostCmd, ServerMsg } from '../../shared
 import type { Lobby, Role, Viewer } from '../../shared/types';
 import { assetCache } from './assets';
 import { ServerClock, localNow } from './clock';
-import { saveSession } from './session';
+import { clearSession, saveSession } from './session';
 
 export type ConnStatus = 'connecting' | 'open' | 'reconnecting' | 'ended';
 
@@ -28,6 +28,12 @@ const BACKOFF_MS = [400, 1000, 2000, 4000, 8000];
 const PING_BURST = 5;
 const PING_BURST_MS = 700;
 const PING_EVERY_MS = 15_000;
+/** No message for this long on an "open" socket means it is half-open (phone slept): reconnect. */
+const STALE_MS = PING_EVERY_MS * 2 + 5_000;
+/** After the tab comes back, the server must answer a ping within this or we reconnect. */
+const PROBE_MS = 5_000;
+/** Ended states where the saved seat token is useless; dropped so a reload does not silently re-seat. */
+const FORGET_SEAT: ReadonlySet<EndReason> = new Set(['kicked', 'left', 'gone', 'full', 'screen_taken']);
 /** After this many failed attempts, ask the API whether the room still exists. */
 const CHECK_GONE_AFTER = 3;
 const FATAL_HELLO: Partial<Record<ErrorCode, EndReason>> = {
@@ -52,6 +58,8 @@ export class RoomClient {
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setTimeout> | null = null;
   private pingsSent = 0;
+  private lastHeard = 0;
+  private probeTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
 
   constructor(
@@ -127,6 +135,8 @@ export class RoomClient {
       this.send({ type: 'hello', code: this.code, name: this.name, role: this.role, ...(this.token ? { token: this.token } : {}) });
     };
     ws.onmessage = (ev) => {
+      if (this.ws !== ws) return;
+      this.lastHeard = Date.now();
       let msg: ServerMsg;
       try {
         msg = JSON.parse(String(ev.data)) as ServerMsg;
@@ -170,7 +180,9 @@ export class RoomClient {
       case 'error': {
         const fatal = this.state.status !== 'open' ? FATAL_HELLO[msg.code] : undefined;
         if (fatal) return this.end(fatal);
-        if (msg.code === 'kicked' || msg.code === 'replaced') return; // the 4000 close follows
+        // End now rather than wait for the 4000 close: if that frame is lost, a retry with the
+        // old token would silently take a fresh seat (kicked) or steal the seat back (replaced).
+        if (msg.code === 'kicked' || msg.code === 'replaced') return this.end(msg.code);
         this.set({ notice: { code: msg.code, message: msg.message, at: Date.now() } });
         return;
       }
@@ -179,6 +191,7 @@ export class RoomClient {
 
   private ping = (): void => {
     if (this.ws?.readyState !== WebSocket.OPEN) return;
+    if (this.state.status === 'open' && Date.now() - this.lastHeard > STALE_MS) return this.dropSocket();
     this.send({ type: 'ping', c: localNow() });
     this.pingsSent++;
     this.pingTimer = setTimeout(this.ping, this.pingsSent < PING_BURST ? PING_BURST_MS : PING_EVERY_MS);
@@ -199,9 +212,35 @@ export class RoomClient {
     );
   }
 
+  /** The socket looks open but is dead (no traffic): abandon it and reconnect. */
+  private dropSocket(): void {
+    const ws = this.ws;
+    this.ws = null;
+    this.clearTimers();
+    assetCache.setRequester(null);
+    try {
+      ws?.close(1000, 'stale');
+    } catch {
+      /* already closed */
+    }
+    this.scheduleRetry();
+  }
+
   /** Network back or tab visible again: retry now instead of waiting out the backoff. */
   private nudge = (): void => {
-    if (document.visibilityState !== 'visible' || this.state.status !== 'reconnecting' || this.ws) return;
+    if (document.visibilityState !== 'visible') return;
+    if (this.state.status === 'open' && this.ws?.readyState === WebSocket.OPEN) {
+      // After a phone sleeps the socket often looks open but is dead: prove it with a ping.
+      const asked = Date.now();
+      this.send({ type: 'ping', c: localNow() });
+      if (this.probeTimer) clearTimeout(this.probeTimer);
+      this.probeTimer = setTimeout(() => {
+        this.probeTimer = null;
+        if (this.state.status === 'open' && this.lastHeard < asked) this.dropSocket();
+      }, PROBE_MS);
+      return;
+    }
+    if (this.state.status !== 'reconnecting' || this.ws) return;
     if (this.retryTimer) clearTimeout(this.retryTimer);
     this.retryTimer = null;
     this.connect();
@@ -217,6 +256,8 @@ export class RoomClient {
   }
 
   private end(reason: EndReason): void {
+    if (this.state.ended) return;
+    if (FORGET_SEAT.has(reason)) clearSession(this.code);
     this.clearTimers();
     this.set({ status: 'ended', ended: reason });
     const ws = this.ws;
@@ -227,7 +268,8 @@ export class RoomClient {
   private clearTimers(): void {
     if (this.retryTimer) clearTimeout(this.retryTimer);
     if (this.pingTimer) clearTimeout(this.pingTimer);
-    this.retryTimer = this.pingTimer = null;
+    if (this.probeTimer) clearTimeout(this.probeTimer);
+    this.retryTimer = this.pingTimer = this.probeTimer = null;
   }
 
   private send(msg: ClientMsgInput): void {

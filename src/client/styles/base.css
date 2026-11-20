@@ -22,6 +22,8 @@ body {
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+  /* Decorations (the rotated ticket's notches) may poke past the gutter; never let the page pan sideways. */
+  overflow-x: clip;
   overscroll-behavior-y: none;
 }
 #app {

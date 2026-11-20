@@ -27,8 +27,8 @@ const ENDED: Record<EndReason, { title: string; body: string }> = {
 
 export function Room({ client, onExit, onRejoin }: { client: RoomClient; onExit(): void; onRejoin(): void }) {
   const state = useRoomState(client);
-  const isPhone = client.role === 'player';
-  useWakeLock(isPhone && state.status !== 'ended');
+  // Phones and the TV both stay awake: a laptop screen dimming mid-game is as bad as a phone locking.
+  useWakeLock(state.status !== 'ended');
 
   if (state.ended) {
     const e = ENDED[state.ended];
