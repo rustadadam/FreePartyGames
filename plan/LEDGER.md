@@ -11,13 +11,13 @@ Resume from the first unit not marked **done**.
 | U2 | Worker, RoomDO, smoke script | done (ea7ac5a) | orchestrator reran: 47 tests pass; `PASS tap-duel room JKTM in 11.7s … smoke: all 1 game(s) passed`; no wrangler left running |
 | U3 | Design system + client shell + kit | done (de48e0f) | orchestrator reran: `Test Files 3 passed, Tests 49 passed`; typecheck clean; shell JS 49.8 kB (18.5 kB gzip); 15 screenshots in `docs/screenshots/` reviewed |
 | U4 | Review of U1–U3 | done (04fba6e, 1ccd49e) | 14 findings, 13 fixed (stale sockets after eviction, kicked token reuse, dead-socket detection, oversized asset replies, setup throw, …). Orchestrator reran: `Tests 57 passed`; smoke `PASS tap-duel … all 1 game(s) passed`; test diff is additions only |
-| U5 | Forgery | pending | |
-| U6 | Comic Strip Club | pending | |
-| U7 | Cracked Cookbook | pending | |
-| U8 | Wiki-what | pending | |
-| U9 | Cave Rave | pending | |
+| U5 | Forgery | in progress (worktree) | |
+| U6 | Comic Strip Club | in progress (worktree) | |
+| U7 | Cracked Cookbook | in progress (worktree) | |
+| U8 | Wiki-what | in progress (worktree) | |
+| U9 | Cave Rave | in progress (worktree) | |
 | U10 | Review of games | pending | |
-| U11 | Docs, REPORT.md, draft PR | pending | |
+| U11 | Docs, REPORT.md, draft PR | in progress: Readme, DEPLOY.md, ADDING_A_GAME.md drafted | |
 
 ## Decisions
 
@@ -38,6 +38,8 @@ Resume from the first unit not marked **done**.
 - **Persistence policy (U4).** Seats, tokens, host, phase, scores and connects are written in the same event; game-only churn keeps the 1 s throttle (free plan: 100k rows written/day). A hard crash can lose ≤ 1 s of game-only state, never a seat or score.
 - **Contract additions (U4).** Views must survive snapshot/restore identically; ≥ 2 distinct players must act; with every player idle a game must still finish on its own timers; stale/out-of-turn actions must not throw or stall. `recordViews()`/`findLeaks()` added to testkit for secret-leak tests.
 - **Left open (U4).** Lobby start button counts away players (server rejects with a toast); spectators receive ephemeral messages (games must never send secrets that way); `POST /api/rooms` has no rate limit.
+- **Cave Rave model (U9).** Launched on opus from the start rather than sonnet: it's the most complex game (clock sync, Web Audio, brackets), and escalating early is cheaper than two failed sonnet runs.
+- **Wiki-what live mode (U8).** Builder told to cut it: the VM can't reach Wikipedia, so the network code would ship unverified.
 - **PR tooling.** There is no `gh` CLI for PRs in this container; the draft PR is opened through the GitHub MCP tool instead.
 
 ## Cuts
