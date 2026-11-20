@@ -1,0 +1,12 @@
+{
+  // Client, shared, core, games, tests and scripts: DOM + Node types.
+  // The Worker (src/server) is checked separately by tsconfig.worker.json
+  // with @cloudflare/workers-types and no DOM lib.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"]
+  },
+  "include": ["src", "tests", "scripts", "vite.config.ts"],
+  "exclude": ["src/server", "node_modules", "dist"]
+}

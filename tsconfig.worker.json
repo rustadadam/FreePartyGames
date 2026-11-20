@@ -1,0 +1,10 @@
+{
+  // Worker + Durable Object. Follows imports into src/core, src/shared and
+  // game logic, so any DOM use there fails this check.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["src/server"]
+}

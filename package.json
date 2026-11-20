@@ -1,0 +1,34 @@
+{
+  "name": "free-party-games",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.worker.json",
+    "test": "vitest run",
+    "smoke": "tsx scripts/smoke.ts",
+    "deploy": "vite build && wrangler deploy",
+    "worker": "wrangler dev"
+  },
+  "dependencies": {
+    "preact": "10.29.8",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261120.1",
+    "@preact/preset-vite": "2.10.6",
+    "@types/node": "22.20.5",
+    "@types/ws": "8.18.2",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vite": "7.3.8",
+    "vitest": "3.2.7",
+    "wrangler": "4.165.0",
+    "ws": "8.23.0"
+  }
+}
