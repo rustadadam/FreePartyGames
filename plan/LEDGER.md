@@ -10,7 +10,7 @@ Resume from the first unit not marked **done**.
 | U1 | Protocol, engine, `_template`, contract + engine tests | done (f28f327) | orchestrator reran: `Test Files 2 passed, Tests 47 passed`; typecheck + build clean |
 | U2 | Worker, RoomDO, smoke script | done (ea7ac5a) | orchestrator reran: 47 tests pass; `PASS tap-duel room JKTM in 11.7s … smoke: all 1 game(s) passed`; no wrangler left running |
 | U3 | Design system + client shell + kit | done (de48e0f) | orchestrator reran: `Test Files 3 passed, Tests 49 passed`; typecheck clean; shell JS 49.8 kB (18.5 kB gzip); 15 screenshots in `docs/screenshots/` reviewed |
-| U4 | Review of U1–U3 | pending | |
+| U4 | Review of U1–U3 | done (04fba6e, 1ccd49e) | 14 findings, 13 fixed (stale sockets after eviction, kicked token reuse, dead-socket detection, oversized asset replies, setup throw, …). Orchestrator reran: `Tests 57 passed`; smoke `PASS tap-duel … all 1 game(s) passed`; test diff is additions only |
 | U5 | Forgery | pending | |
 | U6 | Comic Strip Club | pending | |
 | U7 | Cracked Cookbook | pending | |
@@ -35,6 +35,9 @@ Resume from the first unit not marked **done**.
 - **Design (U3).** Tokens in `docs/DESIGN.md`: grape-night purple base, pink/yellow accents; Bagel Fat One / Atkinson Hyperlegible Next / Martian Mono via `@fontsource` (latin subset). Signature: the room code on a tilted admission ticket with a QR stub. Per-game `data-game` sub-palettes.
 - **Strokes (U3).** Integer points in a 1000-unit-wide virtual box; format in `src/shared/strokes.ts`, zod in `src/shared/strokeSchema.ts`. Protocol limits moved to `src/shared/limits.ts` to keep zod out of the shell bundle.
 - **Deadlines in views (U3).** Games expose deadlines as server timestamps in views; clients count down with the NTP-style server clock.
+- **Persistence policy (U4).** Seats, tokens, host, phase, scores and connects are written in the same event; game-only churn keeps the 1 s throttle (free plan: 100k rows written/day). A hard crash can lose ≤ 1 s of game-only state, never a seat or score.
+- **Contract additions (U4).** Views must survive snapshot/restore identically; ≥ 2 distinct players must act; with every player idle a game must still finish on its own timers; stale/out-of-turn actions must not throw or stall. `recordViews()`/`findLeaks()` added to testkit for secret-leak tests.
+- **Left open (U4).** Lobby start button counts away players (server rejects with a toast); spectators receive ephemeral messages (games must never send secrets that way); `POST /api/rooms` has no rate limit.
 - **PR tooling.** There is no `gh` CLI for PRs in this container; the draft PR is opened through the GitHub MCP tool instead.
 
 ## Cuts
