@@ -13,7 +13,7 @@
     "test": "vitest run",
     "smoke": "tsx scripts/smoke.ts",
     "deploy": "vite build && wrangler deploy",
-    "worker": "wrangler dev"
+    "worker": "wrangler dev --var DEV_BOTS:1"
   },
   "dependencies": {
     "preact": "10.29.8",
