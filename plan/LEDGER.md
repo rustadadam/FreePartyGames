@@ -9,7 +9,7 @@ Resume from the first unit not marked **done**.
 | U0 | Scaffold | done (3c6ea28) | orchestrator reran: typecheck clean; build `dist/assets/index-*.js 11.60 kB ✓ built` |
 | U1 | Protocol, engine, `_template`, contract + engine tests | done (f28f327) | orchestrator reran: `Test Files 2 passed, Tests 47 passed`; typecheck + build clean |
 | U2 | Worker, RoomDO, smoke script | done (ea7ac5a) | orchestrator reran: 47 tests pass; `PASS tap-duel room JKTM in 11.7s … smoke: all 1 game(s) passed`; no wrangler left running |
-| U3 | Design system + client shell + kit | pending | |
+| U3 | Design system + client shell + kit | done (de48e0f) | orchestrator reran: `Test Files 3 passed, Tests 49 passed`; typecheck clean; shell JS 49.8 kB (18.5 kB gzip); 15 screenshots in `docs/screenshots/` reviewed |
 | U4 | Review of U1–U3 | pending | |
 | U5 | Forgery | pending | |
 | U6 | Comic Strip Club | pending | |
@@ -32,6 +32,9 @@ Resume from the first unit not marked **done**.
 - **Cleanup (U2).** Rooms with no sockets for 2 h are deleted at the alarm.
 - **Dev bots flag (U2).** `DEV_BOTS` is `"0"` in `wrangler.jsonc` (deploys ship without bots); `npm run worker` and smoke pass `--var DEV_BOTS:1`.
 - **Smoke skips (U2).** Smoke players act every 300 ms with the game's own `bot.act`; after 8 s with no view change the screen sends `skip` (printed).
+- **Design (U3).** Tokens in `docs/DESIGN.md`: grape-night purple base, pink/yellow accents; Bagel Fat One / Atkinson Hyperlegible Next / Martian Mono via `@fontsource` (latin subset). Signature: the room code on a tilted admission ticket with a QR stub. Per-game `data-game` sub-palettes.
+- **Strokes (U3).** Integer points in a 1000-unit-wide virtual box; format in `src/shared/strokes.ts`, zod in `src/shared/strokeSchema.ts`. Protocol limits moved to `src/shared/limits.ts` to keep zod out of the shell bundle.
+- **Deadlines in views (U3).** Games expose deadlines as server timestamps in views; clients count down with the NTP-style server clock.
 - **PR tooling.** There is no `gh` CLI for PRs in this container; the draft PR is opened through the GitHub MCP tool instead.
 
 ## Cuts
