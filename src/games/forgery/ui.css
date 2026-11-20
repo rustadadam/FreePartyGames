@@ -1,0 +1,249 @@
+/* Forgery. Motif: the gallery frame (double gilt, brass plate) and the red wax seal.
+   Tokens only (docs/DESIGN.md); sizes on the screen are in vh. */
+
+/* ---- the frame ---- */
+.fg-frame {
+  position: relative;
+  margin: 0;
+  padding: var(--s2);
+  border: 3px solid var(--accent);
+  border-radius: var(--r-s);
+  background: var(--stage);
+  box-shadow:
+    inset 0 0 0 3px var(--stage),
+    inset 0 0 0 5px color-mix(in srgb, var(--accent) 70%, transparent),
+    0 10px 24px rgb(0 0 0 / 0.35);
+}
+.fg-frame .k-strokes,
+.fg-frame .k-draw-paper {
+  display: block;
+  width: 100%;
+  border-radius: 4px;
+}
+.fg-frame.is-mine {
+  border-color: var(--highlight);
+}
+.fg-frame.is-mine .k-draw-paper {
+  outline: 2px dashed color-mix(in srgb, var(--highlight) 70%, transparent);
+  outline-offset: -2px;
+}
+.fg-plate {
+  width: max-content;
+  max-width: 80%;
+  margin: var(--s2) auto calc(var(--s1) * -1);
+  padding: var(--s1) var(--s4);
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ---- phone ---- */
+.fg-player {
+  padding-bottom: calc(var(--safe-b) + var(--s4));
+}
+.fg-status {
+  margin: 0;
+  font-size: var(--t-m);
+  font-weight: 700;
+}
+.fg-status.is-me {
+  color: var(--highlight);
+}
+
+/* ---- turn order ---- */
+.fg-order {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fg-turn {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  transition: opacity var(--d-fast), transform var(--d-fast);
+}
+.fg-turn.is-done {
+  opacity: 0.45;
+}
+.fg-turn.is-skipped {
+  opacity: 0.25;
+  text-decoration: line-through;
+}
+.fg-turn.is-now {
+  transform: scale(1.18);
+}
+.fg-turn.is-now .k-avatar-dot {
+  box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px var(--highlight);
+}
+.fg-order.is-named {
+  display: grid;
+  gap: 1.2vh;
+}
+.fg-order.is-named .fg-turn {
+  padding: 0.8vh 1.6vh;
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--t-m);
+}
+.fg-order.is-named .fg-turn.is-now {
+  transform: translateX(1vh);
+  background: color-mix(in srgb, var(--highlight) 22%, var(--surface));
+}
+
+/* ---- vote tally and scores ---- */
+.fg-tally .g-spread {
+  gap: var(--s3);
+}
+.fg-pips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  justify-content: flex-end;
+}
+.fg-pip {
+  display: inline-flex;
+  animation: k-pop var(--d-pop) var(--ease-pop) both;
+}
+.fg-gain {
+  color: var(--ok);
+}
+.fg-scores {
+  margin-top: var(--s3);
+}
+
+/* ---- reveal ---- */
+.fg-reveal {
+  display: grid;
+  gap: var(--s4);
+}
+.fg-rv {
+  display: grid;
+  gap: var(--s2);
+  justify-items: start;
+}
+.fg-rv p {
+  margin: 0;
+}
+.fg-seal-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s4);
+  font-size: var(--t-l);
+}
+/* The wax seal: stamped on, slightly askew. */
+.fg-seal {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9em;
+  height: 1.9em;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent-2) 70%, #fff), var(--accent-2) 55%, color-mix(in srgb, var(--accent-2) 60%, #000));
+  box-shadow:
+    inset 0 0 0 0.12em color-mix(in srgb, var(--accent-2) 60%, #000),
+    inset 0 0 0 0.2em color-mix(in srgb, var(--accent-2) 80%, #fff),
+    0 3px 8px rgb(0 0 0 / 0.5);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 0.5em;
+  letter-spacing: 0.04em;
+  transform: rotate(-12deg);
+  animation: fg-stamp 520ms var(--ease-pop) 350ms both;
+}
+@keyframes fg-stamp {
+  from {
+    opacity: 0;
+    transform: rotate(-30deg) scale(2.6);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-12deg) scale(1);
+  }
+}
+.fg-word {
+  font-family: var(--font-display);
+  font-size: var(--t-xl);
+  line-height: 1;
+  color: var(--accent);
+  text-transform: capitalize;
+}
+.fg-verdict {
+  font-family: var(--font-display);
+  font-size: var(--t-l);
+  line-height: 1.1;
+}
+
+/* ---- screen ---- */
+.fg-screen {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34vw;
+  gap: 3vh;
+  height: 100%;
+  min-height: 0;
+}
+.fg-screen-main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 2vh;
+  min-height: 0;
+  align-content: start;
+}
+.fg-screen .fg-frame {
+  align-self: start;
+  padding: 1.2vh;
+  border-width: 0.6vh;
+  /* the canvas is 4:3: stay inside the stage height */
+  max-width: calc((100vh - 36vh) * 4 / 3);
+  justify-self: center;
+  width: 100%;
+}
+.fg-screen .fg-plate {
+  font-size: var(--t-s);
+  padding: 0.6vh 3vh;
+}
+.fg-rail {
+  display: grid;
+  align-content: start;
+  gap: 2vh;
+  overflow: hidden;
+}
+.fg-rail p {
+  margin: 0;
+}
+.fg-rail .fg-call {
+  font-size: 6vh;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+.fg-rail .fg-word {
+  font-size: 7vh;
+}
+.fg-rail .fg-verdict {
+  font-size: 4.4vh;
+}
+.fg-rail .fg-seal-wrap {
+  font-size: 5vh;
+}
+.fg-rail .g-list > li {
+  font-size: var(--t-m);
+}
+.fg-voters > li.is-done {
+  background: color-mix(in srgb, var(--ok) 18%, var(--surface));
+}
+.fg-screen .fg-bar .eyebrow {
+  font-size: var(--t-s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fg-seal,
+  .fg-pip {
+    animation: none;
+  }
+}
