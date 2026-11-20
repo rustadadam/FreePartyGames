@@ -5,5 +5,6 @@ import type { ClientGameModule } from '../client/gameModule';
 
 export const clientGames: Record<string, () => Promise<ClientGameModule>> = {
   'tap-duel': () => import('./_template/ui').then((m) => m.default),
+  forgery: () => import('./forgery/ui').then((m) => m.default),
   'comic-strip-club': () => import('./comic-strip-club/ui').then((m) => m.default),
 };

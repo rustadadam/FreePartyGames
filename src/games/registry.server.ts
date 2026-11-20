@@ -1,9 +1,11 @@
-// Server-side game registry. Adding a game = one line here + one in registry.client.ts.
+// Server-side game registry. Adding a game = one import + one entry here, and one line in registry.client.ts.
 import type { GameRegistry } from '../core/game';
 import tapDuel from './_template/logic';
+import forgery from './forgery/logic';
 import comicStripClub from './comic-strip-club/logic';
 
 export const serverGames: GameRegistry = {
   [tapDuel.manifest.id]: tapDuel,
+  [forgery.manifest.id]: forgery,
   [comicStripClub.manifest.id]: comicStripClub,
 };

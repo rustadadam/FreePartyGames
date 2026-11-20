@@ -11,7 +11,7 @@ Resume from the first unit not marked **done**.
 | U2 | Worker, RoomDO, smoke script | done (ea7ac5a) | orchestrator reran: 47 tests pass; `PASS tap-duel room JKTM in 11.7s … smoke: all 1 game(s) passed`; no wrangler left running |
 | U3 | Design system + client shell + kit | done (de48e0f) | orchestrator reran: `Test Files 3 passed, Tests 49 passed`; typecheck clean; shell JS 49.8 kB (18.5 kB gzip); 15 screenshots in `docs/screenshots/` reviewed |
 | U4 | Review of U1–U3 | done (04fba6e, 1ccd49e) | 14 findings, 13 fixed (stale sockets after eviction, kicked token reuse, dead-socket detection, oversized asset replies, setup throw, …). Orchestrator reran: `Tests 57 passed`; smoke `PASS tap-duel … all 1 game(s) passed`; test diff is additions only |
-| U5 | Forgery | in progress (worktree) | |
+| U5 | Forgery | done (4627db3, merged) | orchestrator reran after merge: `Test Files 5 passed, Tests 139 passed` (forgery 28 incl. leak tests over 3/5/8 players × 5 seeds; contract 71); typecheck + build clean; screenshots `docs/screenshots/forgery-*` reviewed |
 | U6 | Comic Strip Club | done (4adcebd, merged) | orchestrator reran after merge: `Test Files 4 passed, Tests 88 passed` (contract 48 incl. comic-strip-club 3/8/20 × 3 seeds ± screen); typecheck + build clean. Agent's smoke: `PASS comic-strip-club … 2 skips, assets ok (16 ids)`. Remix shipped. UI not yet seen in a browser (U10). |
 | U7 | Cracked Cookbook | in progress (worktree) | |
 | U8 | Wiki-what | in progress (worktree) | |
@@ -41,6 +41,7 @@ Resume from the first unit not marked **done**.
 - **Cave Rave model (U9).** Launched on opus from the start rather than sonnet: it's the most complex game (clock sync, Web Audio, brackets), and escalating early is cheaper than two failed sonnet runs.
 - **Wiki-what live mode (U8).** Builder told to cut it: the VM can't reach Wikipedia, so the network code would ship unverified.
 - **Comic Strip Club (U6).** Chain rotation: round r, player p works chain (p − r) mod n (no repeats at ≥ 4 players; at 3 the author draws panel 3 of their own strip, never back-to-back). Min 3 players. You can't vote for the strip whose prompt you wrote. 100 pts per vote to each distinct contributor. Remix shipped (2–4 bonus strips, no vote).
+- **Forgery (U5).** Ties or no votes accuse nobody (forger escapes). Scoring: forger uncaught +3; caught but guesses word +2; caught and wrong → every artist +1; each artist who voted for the forger +1. Forger leaving mid-round voids the round. Guess is a pick-list sent only to the caught forger. Strokes forced to seat color server-side.
 - **PR tooling.** There is no `gh` CLI for PRs in this container; the draft PR is opened through the GitHub MCP tool instead.
 
 ## Cuts
