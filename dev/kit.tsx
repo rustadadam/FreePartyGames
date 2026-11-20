@@ -1,0 +1,114 @@
+// Kit preview: every kit component with sample data. Dev only, not in the production build.
+// Open with `npm run dev`, then /dev/kit.html (add ?game=forgery etc. to preview a sub-palette).
+import { render } from 'preact';
+import { useState } from 'preact/hooks';
+import '../src/client/fonts';
+import '../src/client/styles/tokens.css';
+import '../src/client/styles/base.css';
+import '../src/client/kit/kit.css';
+import '../src/client/styles/shell.css';
+import {
+  Avatar,
+  DrawingCanvas,
+  makeDrawing,
+  PlayerChip,
+  PromptCard,
+  QR,
+  RevealStage,
+  StrokeView,
+  Timer,
+  useServerNow,
+  Vote,
+  type Stroke,
+} from '../src/client/kit';
+import type { Lobby } from '../src/shared/types';
+
+const players = [
+  { id: 'a', name: 'Maya', color: '#ff5d5d' },
+  { id: 'b', name: 'Theo', color: '#ffb13b' },
+  { id: 'c', name: 'Jun', color: '#2ec4b6' },
+  { id: 'd', name: 'Priya', color: '#7a6bff' },
+].map((p) => ({ ...p, isBot: false, isHost: p.id === 'a', connected: p.id !== 'd', score: 0 }));
+const lobby = { players } as unknown as Lobby;
+const game = new URLSearchParams(location.search).get('game') ?? undefined;
+
+function Preview() {
+  const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const [single, setSingle] = useState<Stroke[]>([]);
+  const [live, setLive] = useState(0);
+  const [vote, setVote] = useState<string | null>(null);
+  const now = useServerNow(0);
+  const [deadline] = useState(() => now + 30_000);
+  return (
+    <main class="view-phone" data-game={game} style={{ padding: '16px', gap: '28px', display: 'grid' }}>
+      <section class="g-stack">
+        <span class="eyebrow">Avatar · PlayerChip</span>
+        <div class="g-row">
+          {players.map((p) => (
+            <Avatar key={p.id} name={p.name} color={p.color} host={p.isHost} away={!p.connected} label />
+          ))}
+        </div>
+        <PlayerChip lobby={lobby} id="b" trailing={12} you />
+      </section>
+      <section class="g-stack">
+        <span class="eyebrow">Timer · PromptCard</span>
+        <div class="g-row">
+          <Timer deadline={deadline} total={30_000} />
+          <Timer deadline={now + 3_000} total={10_000} />
+        </div>
+        <PromptCard eyebrow="Category">Things in a kitchen</PromptCard>
+        <PromptCard eyebrow="Your secret word" secret tone="accent">
+          Colander
+        </PromptCard>
+        <PromptCard eyebrow="Question" footer="Source: Great Molasses Flood">
+          How fast did the wave travel?
+        </PromptCard>
+      </section>
+      <section class="g-stack">
+        <span class="eyebrow">
+          DrawingCanvas ({strokes.length} strokes, {live} live pts)
+        </span>
+        <DrawingCanvas strokes={strokes} onChange={setStrokes} onStrokeProgress={(p) => setLive((n) => n + p.length / 2)} aspect={4 / 3} />
+        <span class="eyebrow">singleStroke, seat color, dark paper</span>
+        <DrawingCanvas
+          strokes={single}
+          onChange={setSingle}
+          singleStroke
+          colors={['#ffe14d']}
+          widths={[10]}
+          paper="var(--stage)"
+          underlay={strokes}
+          aspect={4 / 3}
+        />
+        <span class="eyebrow">StrokeView (animated)</span>
+        <div style={{ width: '50%' }}>
+          <StrokeView key={strokes.length} drawing={makeDrawing(strokes, 4 / 3)} animate />
+        </div>
+      </section>
+      <section class="g-stack">
+        <span class="eyebrow">Vote</span>
+        <Vote
+          label="Who is the forger?"
+          options={players.map((p) => ({ id: p.id, label: p.name, color: p.color, hint: p.id === 'a' ? 'Drew the handle' : undefined }))}
+          value={vote}
+          onVote={setVote}
+        />
+      </section>
+      <section class="g-stack">
+        <span class="eyebrow">RevealStage (interval 700 ms) · QR</span>
+        <RevealStage
+          layout="row"
+          interval={700}
+          items={['Panel one', 'Panel two', 'Panel three'].map((t) => (
+            <div class="g-panel">{t}</div>
+          ))}
+        />
+        <div style={{ width: '140px' }}>
+          <QR value="https://example.workers.dev/ABCD" />
+        </div>
+      </section>
+    </main>
+  );
+}
+
+render(<Preview />, document.getElementById('app')!);

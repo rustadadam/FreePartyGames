@@ -1,0 +1,503 @@
+/* Kit component styles. Everything reads the semantic tokens, so a game's
+   data-game sub-palette re-skins the kit automatically. */
+
+/* ---- motion primitive: the one "pop" ---- */
+@keyframes k-pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.k-pop {
+  animation: k-pop var(--d-pop) var(--ease-pop) both;
+}
+
+/* ---- Avatar ---- */
+.k-avatar {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35em;
+  min-width: 0;
+}
+.k-avatar-dot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--av-size);
+  height: var(--av-size);
+  border-radius: 50%;
+  background: var(--av);
+  color: var(--av-ink);
+  font-family: var(--font-display);
+  font-size: calc(var(--av-size) * 0.5);
+  line-height: 1;
+  flex: none;
+}
+.k-avatar.is-host .k-avatar-dot {
+  box-shadow:
+    0 0 0 calc(var(--av-size) * 0.06) var(--bg),
+    0 0 0 calc(var(--av-size) * 0.12) var(--highlight);
+}
+.k-avatar.is-away .k-avatar-dot {
+  opacity: 0.4;
+  outline: 2px dashed var(--muted);
+  outline-offset: 2px;
+}
+.k-avatar-bot {
+  position: absolute;
+  right: -0.4em;
+  bottom: -0.2em;
+  padding: 0.1em 0.35em;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: max(10px, calc(var(--av-size) * 0.2));
+}
+.k-avatar-name {
+  max-width: calc(var(--av-size) * 2.2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-s);
+  font-weight: 700;
+}
+
+/* ---- QR ---- */
+.k-qr {
+  border-radius: 6%;
+}
+
+/* ---- Timer ---- */
+.k-timer {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  flex: none;
+}
+.view-screen .k-timer {
+  width: 9vh;
+  height: 9vh;
+}
+.k-timer-l {
+  transform: scale(2);
+  margin: calc(var(--tap) / 2);
+}
+.k-timer svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.k-timer-track {
+  fill: var(--surface);
+  stroke: var(--line);
+  stroke-width: 4;
+}
+.k-timer-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 200ms linear;
+}
+.k-timer-num {
+  position: relative;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: calc(var(--tap) * 0.36);
+  font-variant-numeric: tabular-nums;
+}
+.view-screen .k-timer-num {
+  font-size: 3.4vh;
+}
+.k-timer.is-urgent .k-timer-ring {
+  stroke: var(--highlight);
+}
+.k-timer.is-urgent .k-timer-num {
+  color: var(--highlight);
+}
+
+/* ---- PromptCard ---- */
+.k-prompt {
+  position: relative;
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s5);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  border: 2px solid var(--line);
+  /* punched corner, the ticket motif */
+  -webkit-mask: radial-gradient(circle at top right, transparent 14px, #000 15px);
+  mask: radial-gradient(circle at top right, transparent 14px, #000 15px);
+}
+.k-prompt-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.k-prompt-accent .eyebrow {
+  color: inherit;
+  opacity: 0.75;
+}
+.k-prompt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding-right: var(--s4);
+}
+.k-prompt-body {
+  font-family: var(--font-display);
+  font-size: var(--t-l);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.k-prompt-l .k-prompt-body {
+  font-size: var(--t-xl);
+}
+.k-prompt-veil {
+  font-family: var(--font-body);
+  font-size: var(--t-m);
+  opacity: 0.7;
+}
+.k-prompt-toggle {
+  min-height: 44px;
+  min-width: 64px;
+  padding: 0 var(--s3);
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+}
+.k-prompt-foot {
+  padding-top: var(--s2);
+  border-top: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  opacity: 0.8;
+}
+
+/* ---- Vote ---- */
+.k-vote {
+  display: grid;
+  gap: var(--s3);
+}
+.k-vote-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.k-vote-opt {
+  display: grid;
+  gap: var(--s2);
+  min-height: var(--tap);
+  padding: var(--s3) var(--s4);
+  border: 2px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  text-align: left;
+  transition:
+    transform var(--d-fast) var(--ease-out),
+    border-color var(--d-fast),
+    opacity var(--d-fast);
+}
+.k-vote-opt:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.k-vote-opt:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.k-vote-opt.is-chosen {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  opacity: 1;
+}
+.k-vote-media {
+  display: block;
+  border-radius: var(--r-s);
+  overflow: hidden;
+}
+.k-vote-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-width: 0;
+}
+.k-vote-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex: none;
+}
+.k-vote-label {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.k-vote-hint {
+  display: block;
+  font-weight: 400;
+  font-size: var(--t-s);
+  color: var(--muted);
+}
+.k-vote-check,
+.k-vote-count {
+  flex: none;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+}
+.k-vote-count {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* ---- RevealStage ---- */
+@keyframes k-reveal-in {
+  from {
+    transform: translateY(24px) scale(0.94) rotate(-1.5deg);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.k-reveal {
+  display: grid;
+  gap: var(--s4);
+}
+.k-reveal-row {
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+}
+.k-reveal-single {
+  place-items: center;
+}
+.k-reveal-item {
+  min-width: 0;
+  animation: k-reveal-in var(--d-pop) var(--ease-pop) both;
+}
+
+/* ---- StrokeView ---- */
+.k-strokes {
+  width: 100%;
+  height: auto;
+  border-radius: var(--r-s);
+}
+@keyframes k-draw-on {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.k-strokes.is-animated path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation-name: k-draw-on;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+/* ---- DrawingCanvas ---- */
+.k-draw {
+  display: grid;
+  gap: var(--s3);
+}
+.k-draw-paper {
+  position: relative;
+  width: 100%;
+  border-radius: var(--r-m);
+  overflow: hidden;
+  box-shadow: 0 0 0 2px var(--line);
+}
+.k-draw-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.k-draw-live {
+  touch-action: none;
+  cursor: crosshair;
+}
+.k-draw.is-locked .k-draw-live {
+  cursor: default;
+}
+.k-draw-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.k-draw-tools {
+  display: grid;
+  gap: var(--s3);
+}
+.k-draw-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+.k-swatch {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid var(--bg);
+  background: var(--sw);
+  box-shadow: 0 0 0 2px var(--line);
+  padding: 0;
+}
+.k-swatch.is-on {
+  box-shadow: 0 0 0 3px var(--highlight);
+  transform: scale(1.08);
+}
+.k-draw-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.k-width {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-s);
+  border: 2px solid var(--line);
+  background: var(--surface);
+  padding: 0;
+}
+.k-width span {
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.k-width.is-on {
+  border-color: var(--highlight);
+}
+.k-draw-undo {
+  margin-left: auto;
+}
+
+/* ---- PlayerChip ---- */
+.k-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-width: 0;
+}
+.k-chip-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+.k-chip-you {
+  font-weight: 400;
+  color: var(--muted);
+}
+.k-chip-trail {
+  flex: none;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Game layout helpers (documented in docs/DESIGN.md, Kit) ---- */
+.g-stack {
+  display: grid;
+  gap: var(--s4);
+  align-content: start;
+}
+.g-center {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--s4);
+  min-height: 100%;
+  text-align: center;
+}
+.g-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+}
+.g-spread {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+.g-call {
+  font-family: var(--font-display);
+  font-size: var(--t-mega);
+  line-height: 0.95;
+  color: var(--accent);
+}
+.g-title {
+  font-family: var(--font-display);
+  font-size: var(--t-xl);
+  line-height: 1;
+}
+.g-muted {
+  color: var(--muted);
+}
+.g-panel {
+  padding: var(--s4);
+  border-radius: var(--r-m);
+  background: var(--stage);
+  border: 2px solid var(--line);
+}
+.g-list {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.g-list > li {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-s);
+  background: var(--surface);
+}
+/* A big full-width game button (the "tap" target on phones). */
+.g-hit {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 44vh;
+  border: 0;
+  border-radius: var(--r-l);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-display);
+  font-size: var(--t-mega);
+  box-shadow: 0 8px 0 color-mix(in srgb, var(--accent) 50%, #000);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.g-hit:active:not(:disabled) {
+  transform: translateY(6px);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--accent) 50%, #000);
+}
+.g-hit:disabled {
+  background: var(--surface);
+  color: var(--muted);
+  box-shadow: none;
+}

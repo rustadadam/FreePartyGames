@@ -33,6 +33,8 @@ export interface TapView {
   round: number;
   rounds: number;
   goAt: number | null;
+  /** Server ms when an unanswered "go" times out: put deadlines in views for the kit Timer. */
+  goDeadline: number | null;
   winner: string | null;
   scores: Record<string, number>;
   /** Only for players: their own status. */
@@ -136,6 +138,7 @@ export default defineGame<TapState, TapAction, TapSettings>({
       round: s.round,
       rounds: s.rounds,
       goAt: s.goAt,
+      goDeadline: s.phase === 'go' && s.goAt !== null ? s.goAt + GO_TIMEOUT_MS : null,
       winner: s.winner,
       scores: s.scores,
       you: viewer.kind === 'player' ? { lockedOut: s.lockedOut.includes(viewer.id) } : null,

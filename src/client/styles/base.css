@@ -1,0 +1,168 @@
+/* Reset, base elements and the few shared utility classes (buttons, inputs, eyebrow). */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  color-scheme: dark;
+}
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+}
+body {
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--t-m);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+#app {
+  min-height: 100dvh;
+}
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+h1,
+h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+img,
+svg,
+canvas {
+  display: block;
+}
+
+:focus-visible {
+  outline: 3px solid var(--highlight);
+  outline-offset: 3px;
+  border-radius: var(--r-s);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---- eyebrow: mono, uppercase, tracked ---- */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: calc(var(--t-s) * 0.86);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: var(--tap);
+  padding: 0 var(--s5);
+  border: 2px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  font-weight: 700;
+  font-size: var(--t-m);
+  text-decoration: none;
+  transition:
+    transform var(--d-fast) var(--ease-out),
+    background var(--d-fast);
+  user-select: none;
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 55%, #000);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 55%, #000);
+}
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: transparent;
+}
+.btn-block {
+  width: 100%;
+}
+.btn-s {
+  min-height: 44px;
+  padding: 0 var(--s4);
+  font-size: var(--t-s);
+}
+
+/* ---- inputs ---- */
+.field {
+  display: grid;
+  gap: var(--s2);
+}
+.input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--s4);
+  border: 2px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--bg);
+  font-size: var(--t-m);
+}
+.input:focus-visible {
+  border-color: var(--highlight);
+  outline: none;
+}
+.input::placeholder {
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

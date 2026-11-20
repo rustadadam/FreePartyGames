@@ -1,12 +1,9 @@
 import { render } from 'preact';
-
-function App() {
-  return (
-    <main>
-      <h1>Free Party Games</h1>
-      <p>Coming soon.</p>
-    </main>
-  );
-}
+import './fonts';
+import './styles/tokens.css';
+import './styles/base.css';
+import './kit/kit.css';
+import './styles/shell.css';
+import { App } from './app/App';
 
 render(<App />, document.getElementById('app')!);
