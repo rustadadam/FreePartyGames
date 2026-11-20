@@ -12,7 +12,7 @@ Resume from the first unit not marked **done**.
 | U3 | Design system + client shell + kit | done (de48e0f) | orchestrator reran: `Test Files 3 passed, Tests 49 passed`; typecheck clean; shell JS 49.8 kB (18.5 kB gzip); 15 screenshots in `docs/screenshots/` reviewed |
 | U4 | Review of U1–U3 | done (04fba6e, 1ccd49e) | 14 findings, 13 fixed (stale sockets after eviction, kicked token reuse, dead-socket detection, oversized asset replies, setup throw, …). Orchestrator reran: `Tests 57 passed`; smoke `PASS tap-duel … all 1 game(s) passed`; test diff is additions only |
 | U5 | Forgery | in progress (worktree) | |
-| U6 | Comic Strip Club | in progress (worktree) | |
+| U6 | Comic Strip Club | done (4adcebd, merged) | orchestrator reran after merge: `Test Files 4 passed, Tests 88 passed` (contract 48 incl. comic-strip-club 3/8/20 × 3 seeds ± screen); typecheck + build clean. Agent's smoke: `PASS comic-strip-club … 2 skips, assets ok (16 ids)`. Remix shipped. UI not yet seen in a browser (U10). |
 | U7 | Cracked Cookbook | in progress (worktree) | |
 | U8 | Wiki-what | in progress (worktree) | |
 | U9 | Cave Rave | in progress (worktree) | |
@@ -40,6 +40,7 @@ Resume from the first unit not marked **done**.
 - **Left open (U4).** Lobby start button counts away players (server rejects with a toast); spectators receive ephemeral messages (games must never send secrets that way); `POST /api/rooms` has no rate limit.
 - **Cave Rave model (U9).** Launched on opus from the start rather than sonnet: it's the most complex game (clock sync, Web Audio, brackets), and escalating early is cheaper than two failed sonnet runs.
 - **Wiki-what live mode (U8).** Builder told to cut it: the VM can't reach Wikipedia, so the network code would ship unverified.
+- **Comic Strip Club (U6).** Chain rotation: round r, player p works chain (p − r) mod n (no repeats at ≥ 4 players; at 3 the author draws panel 3 of their own strip, never back-to-back). Min 3 players. You can't vote for the strip whose prompt you wrote. 100 pts per vote to each distinct contributor. Remix shipped (2–4 bonus strips, no vote).
 - **PR tooling.** There is no `gh` CLI for PRs in this container; the draft PR is opened through the GitHub MCP tool instead.
 
 ## Cuts
