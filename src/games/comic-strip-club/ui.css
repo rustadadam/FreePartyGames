@@ -1,0 +1,264 @@
+/* Comic Strip Club: halftone dots, ink gutters, white paper panels, speech-tail captions. */
+.cs-root {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 100%;
+}
+.cs-body {
+  padding-bottom: var(--s4);
+}
+.cs-call {
+  text-align: center;
+  padding: var(--s6) 0;
+}
+.cs-panel {
+  background: #fffdf7;
+  border: 4px solid #14101f;
+  border-radius: 4px;
+  overflow: hidden;
+  min-width: 0;
+  box-shadow: 4px 4px 0 rgb(20 16 31 / 0.5);
+}
+.cs-panel .k-strokes {
+  border-radius: 0;
+  display: block;
+}
+.cs-ghost {
+  aspect-ratio: 4 / 3;
+  background: radial-gradient(circle, rgb(20 16 31 / 0.12) 1.5px, transparent 2px) 0 0 / 10px 10px;
+}
+.cs-blank {
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  color: #6b6480;
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: radial-gradient(circle, rgb(20 16 31 / 0.14) 1.5px, transparent 2px) 0 0 / 10px 10px, #fffdf7;
+}
+/* Speech-tail caption */
+.cs-caption {
+  position: relative;
+  margin: 0 0 var(--s4);
+  padding: var(--s3) var(--s4);
+  background: #fffdf7;
+  color: #14101f;
+  border: 4px solid #14101f;
+  border-radius: var(--r-l);
+  font-family: var(--font-display);
+  font-size: var(--t-l);
+  line-height: 1.2;
+  text-align: left;
+}
+.cs-caption::after {
+  content: '';
+  position: absolute;
+  left: 28px;
+  bottom: -14px;
+  width: 20px;
+  height: 20px;
+  background: #fffdf7;
+  border-right: 4px solid #14101f;
+  border-bottom: 4px solid #14101f;
+  transform: skewX(30deg) rotate(45deg) scale(0.8);
+}
+.cs-auto {
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  color: #6b6480;
+}
+.cs-credits {
+  margin: var(--s2) 0 0;
+  font-size: var(--t-s);
+  color: var(--muted);
+}
+.cs-strip {
+  margin: 0;
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border-radius: var(--r-m);
+  background-color: var(--stage);
+  background-image: radial-gradient(circle, rgb(255 255 255 / 0.07) 1.6px, transparent 2px);
+  background-size: 12px 12px;
+}
+.cs-row,
+.cs-mini {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px; /* the ink gutter */
+  background: #14101f;
+  padding: 6px;
+  border-radius: 6px;
+}
+.cs-row .cs-panel,
+.cs-mini .cs-panel {
+  border-width: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+.cs-mini {
+  padding: 3px;
+  gap: 3px;
+}
+.cs-source {
+  display: grid;
+  gap: var(--s2);
+}
+.cs-source .cs-caption {
+  margin-bottom: var(--s2);
+}
+.cs-paper.is-sent {
+  opacity: 0.6;
+}
+.cs-text {
+  min-height: 120px;
+  padding: var(--s3) var(--s4);
+  resize: none;
+  font-size: var(--t-m);
+}
+.cs-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 8;
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s5) var(--gutter) calc(env(safe-area-inset-bottom, 0px) + var(--s3));
+  background: linear-gradient(to bottom, transparent, var(--bg) 35%);
+}
+.cs-wait {
+  margin: 0;
+  min-height: var(--tap);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  border: 2px dashed var(--line);
+  border-radius: var(--r-m);
+  color: var(--muted);
+}
+.cs-progress {
+  display: grid;
+  gap: var(--s2);
+}
+.cs-waiting {
+  gap: var(--s2);
+}
+.cs-votes {
+  display: inline-grid;
+  place-items: center;
+  min-width: 2.2em;
+  padding: 0 var(--s2);
+  border-radius: 999px;
+  background: var(--accent-2);
+  color: #14101f;
+  font-family: var(--font-display);
+  font-size: var(--t-l);
+}
+.cs-rank {
+  display: grid;
+  gap: var(--s2);
+  justify-items: start;
+}
+.cs-rank.is-top .cs-strip {
+  box-shadow: 0 0 0 4px var(--accent-2);
+}
+.cs-standings {
+  gap: var(--s2);
+}
+
+/* ---- screen ---- */
+.cs-stage {
+  display: grid;
+  gap: 2.4vh;
+  align-content: start;
+  height: 100%;
+  padding: 2vh 0;
+}
+.cs-center {
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+.cs-stage .cs-caption {
+  font-size: 5vh;
+  border-width: 0.6vh;
+  max-width: 90%;
+}
+.cs-board {
+  position: relative;
+}
+.cs-ghosts,
+.cs-overlay {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.6vh;
+  padding: 1.6vh;
+  background: #14101f;
+  border-radius: 1vh;
+}
+.cs-ghosts span {
+  aspect-ratio: 4 / 3;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.14) 2px, transparent 2.5px) 0 0 / 14px 14px, #2a2447;
+}
+.cs-overlay {
+  position: absolute;
+  inset: 0;
+  background: none;
+  grid-auto-flow: row;
+  align-items: start;
+}
+.cs-overlay .k-reveal-item {
+  display: grid;
+}
+.cs-pane {
+  display: grid;
+  gap: 0.6vh;
+}
+.cs-pane .cs-panel {
+  border-width: 0;
+  box-shadow: none;
+}
+.cs-by {
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  color: #fffdf7;
+  text-align: center;
+}
+.cs-wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(34vh, 1fr));
+  gap: 2vh;
+}
+.cs-wall .cs-caption {
+  font-size: var(--t-s);
+  border-width: 3px;
+  padding: 0.8vh 1.4vh;
+}
+.cs-split {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+  gap: 3vh;
+  height: 100%;
+}
+.cs-tally {
+  display: grid;
+  gap: 2vh;
+}
+.cs-tally .cs-rank {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+.cs-tally .cs-strip {
+  width: 100%;
+}
+.cs-tally .cs-caption {
+  font-size: 3vh;
+  margin-bottom: 1vh;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cs-panel {
+    box-shadow: none;
+  }
+}
