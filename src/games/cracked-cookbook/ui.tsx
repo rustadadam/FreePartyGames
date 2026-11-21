@@ -147,7 +147,7 @@ function DrawProp({ view, send }: { view: CookView; send(a: CookAction): void })
   const prompt = view.you?.prompt ?? 'Mystery item';
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [name, setName] = useState(prompt);
-  const submit = () => strokes.length && send({ type: 'prop', strokes, name: name.trim() || prompt });
+  const submit = () => strokes.length && send({ type: 'prop', strokes, name: name.trim() || prompt, round: view.round });
   useLastCall(view.deadline, strokes.length > 0, submit);
   return (
     <section class="cc-phone">

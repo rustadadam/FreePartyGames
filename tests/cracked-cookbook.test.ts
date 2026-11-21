@@ -200,3 +200,16 @@ describe('cracked cookbook: anonymous dishes', () => {
     });
   }
 });
+
+describe('cracked cookbook: late drafts', () => {
+  it('a round-1 prop arriving in round 2 does not use up the round-2 drawing', () => {
+    const { ctx } = fakeCtx();
+    const s = game.setup(ctx, players, {});
+    game.onTimer!(s, ctx, 'phase');
+    expect(s.round).toBe(2);
+    game.onAction(s, ctx, 'a', { type: 'prop', strokes, name: 'late', round: 1 });
+    expect(s.submitted).not.toContain('a');
+    game.onAction(s, ctx, 'a', { type: 'prop', strokes, name: 'fresh', round: 2 });
+    expect(s.props.map((p) => p.name)).toEqual(['fresh']);
+  });
+});

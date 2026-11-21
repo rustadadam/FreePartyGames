@@ -42,7 +42,15 @@ const StickerSchema = z
 export type Sticker = z.infer<typeof StickerSchema>;
 
 export const actionSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('prop'), strokes: StrokesSchema, name: z.string().max(80) }).strict(),
+  z
+    .object({
+      type: z.literal('prop'),
+      strokes: StrokesSchema,
+      name: z.string().max(80),
+      /** The drawing round this prop was drawn in: a late round-1 draft must not land in round 2. */
+      round: z.number().int().min(1).max(DRAW_ROUNDS).optional(),
+    })
+    .strict(),
   z
     .object({ type: z.literal('dish'), strokes: StrokesSchema, stickers: z.array(StickerSchema).max(MAX_STICKERS) })
     .strict(),
@@ -318,6 +326,7 @@ export default defineGame<CookState, CookAction, Record<string, never>>({
 
     if (a.type === 'prop') {
       if (s.phase !== 'draw' || s.submitted.includes(playerId)) return;
+      if (a.round !== undefined && a.round !== s.round) return;
       s.submitted.push(playerId);
       if (a.strokes.length) {
         const fallback = s.itemPrompts[playerId] ?? 'Mystery item';
@@ -426,7 +435,7 @@ export default defineGame<CookState, CookAction, Record<string, never>>({
       const you = v.you;
       if (!you || !rng.chance(0.7)) return null;
       if (v.phase === 'draw' && !you.submitted) {
-        return { type: 'prop', strokes: botStrokes(rng), name: (you.prompt ?? 'Mystery item').slice(0, NAME_MAX) };
+        return { type: 'prop', strokes: botStrokes(rng), name: (you.prompt ?? 'Mystery item').slice(0, NAME_MAX), round: v.round };
       }
       if (v.phase === 'cook' && !you.submitted) {
         const stickers: Sticker[] = [];
