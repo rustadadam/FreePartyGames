@@ -254,42 +254,43 @@ function Compose({ view, send, assets }: { view: CookView; send(a: CookAction): 
     if (picked) setPlaced([...placed.filter((p) => p.uid !== sel), picked]);
   };
 
+  // Phone layout: the order line and the plate stay pinned under the header while the controls
+  // below scroll, and the mode switch sits in the bottom dock beside "Serve it up". So the plate
+  // never scrolls away while a sticker is being moved or resized.
   return (
-    <section class="cc-phone">
-      <Bar view={view} />
-      <PromptCard eyebrow="Your order" tone="accent">
-        {you.meal}
-      </PromptCard>
-      <DrawingCanvas
-        strokes={strokes}
-        onChange={setStrokes}
-        colors={INK}
-        aspect={1}
-        paper={PLATE_PAPER}
-        disabled={mode === 'place'}
-        label={`Plate for ${you.meal}`}
-      >
-        {placed.map((st) => (
-          <DragSticker
-            key={st.uid}
-            st={st}
-            pantry={view.pantry}
-            assets={assets}
-            live={mode === 'place'}
-            selected={st.uid === sel}
-            onSelect={() => setSel(st.uid)}
-            onMove={(x, y) => patch(st.uid, { x, y })}
-          />
-        ))}
-      </DrawingCanvas>
-
-      <div class="cc-seg" role="radiogroup" aria-label="What your finger does">
-        <button type="button" role="radio" aria-checked={mode === 'place'} class={mode === 'place' ? 'is-on' : ''} onClick={() => setMode('place')}>
-          Move stickers ({placed.length}/{MAX_STICKERS})
-        </button>
-        <button type="button" role="radio" aria-checked={mode === 'draw'} class={mode === 'draw' ? 'is-on' : ''} onClick={() => setMode('draw')}>
-          Draw
-        </button>
+    <section class="cc-phone cc-compose">
+      <div class={`cc-pin${mode === 'place' ? ' is-pinned' : ''}`}>
+        <div class="cc-order-line">
+          <p class="cc-order-text">
+            <span class="eyebrow">Your order</span>
+            <b>{you.meal}</b>
+          </p>
+          <Timer deadline={view.deadline} total={COOK_MS} />
+        </div>
+        <DrawingCanvas
+          strokes={strokes}
+          onChange={setStrokes}
+          colors={INK}
+          aspect={1}
+          paper={PLATE_PAPER}
+          disabled={mode === 'place'}
+          tools={mode === 'draw'}
+          label={`Plate for ${you.meal}`}
+          class="cc-canvas"
+        >
+          {placed.map((st) => (
+            <DragSticker
+              key={st.uid}
+              st={st}
+              pantry={view.pantry}
+              assets={assets}
+              live={mode === 'place'}
+              selected={st.uid === sel}
+              onSelect={() => setSel(st.uid)}
+              onMove={(x, y) => patch(st.uid, { x, y })}
+            />
+          ))}
+        </DrawingCanvas>
       </div>
 
       {mode === 'place' && picked && (
@@ -302,22 +303,21 @@ function Compose({ view, send, assets }: { view: CookView; send(a: CookAction): 
             <span class="eyebrow">Turn</span>
             <input type="range" min={-180} max={180} value={picked.r} onInput={(e) => patch(picked.uid, { r: Number((e.target as HTMLInputElement).value) })} />
           </label>
-          <div class="g-row">
-            <button type="button" class="btn btn-s" onClick={front}>
-              Bring to front
-            </button>
-            <button type="button" class="btn btn-s btn-danger" onClick={remove}>
-              Remove
-            </button>
-          </div>
+          <button type="button" class="btn btn-s" onClick={front}>
+            To front
+          </button>
+          <button type="button" class="btn btn-s btn-danger" onClick={remove}>
+            Remove
+          </button>
         </div>
       )}
-      {mode === 'place' && !picked && placed.length > 0 && <p class="g-muted">Tap a sticker to select it, drag to move it.</p>}
+      {mode === 'place' && !picked && (
+        <p class="g-muted cc-hint">{placed.length ? 'Tap a sticker to select it, drag to move it.' : 'Tap a prop below to put it on your plate.'}</p>
+      )}
 
       <div>
-        <span class="eyebrow">Your props, drawn by the others</span>
         {hand.length ? (
-          <div class="cc-tray">
+          <div class="cc-tray" role="group" aria-label="Your props, drawn by the others: tap one to add it">
             {hand.map((i) => (
               <button key={i} type="button" class="cc-tray-item" disabled={placed.length >= MAX_STICKERS} onClick={() => add(i)} aria-label={`Add ${view.pantry[i]?.name}`}>
                 <Art asset={view.pantry[i]?.asset} assets={assets} outline label="" />
@@ -330,8 +330,16 @@ function Compose({ view, send, assets }: { view: CookView; send(a: CookAction): 
         )}
       </div>
 
-      <div class="cc-dock">
-        <button type="button" class="btn btn-primary btn-block" onClick={submit}>
+      <div class="cc-dock cc-dock-cook">
+        <div class="cc-seg" role="radiogroup" aria-label="What your finger does">
+          <button type="button" role="radio" aria-checked={mode === 'place'} class={mode === 'place' ? 'is-on' : ''} onClick={() => setMode('place')}>
+            Stickers {placed.length}/{MAX_STICKERS}
+          </button>
+          <button type="button" role="radio" aria-checked={mode === 'draw'} class={mode === 'draw' ? 'is-on' : ''} onClick={() => setMode('draw')}>
+            Draw
+          </button>
+        </div>
+        <button type="button" class="btn btn-primary" onClick={submit}>
           Serve it up
         </button>
       </div>

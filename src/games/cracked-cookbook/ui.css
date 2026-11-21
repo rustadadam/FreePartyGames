@@ -145,6 +145,65 @@
   padding: var(--s5) var(--gutter) calc(var(--safe-b) + var(--s3));
   background: linear-gradient(to bottom, transparent, var(--bg) 35%);
 }
+/* Cook: the order line and the plate pin under the phone header while you move stickers. */
+.cc-pin {
+  display: grid;
+  gap: var(--s2);
+  background: var(--bg);
+}
+.cc-pin.is-pinned {
+  position: sticky;
+  top: calc(var(--safe-t) + 66px);
+  z-index: 4;
+  margin: calc(var(--s2) * -1) calc(var(--gutter) * -1) 0;
+  padding: var(--s2) var(--gutter) var(--s2);
+  box-shadow: 0 12px 16px -12px rgb(0 0 0 / 0.6);
+}
+/* Sized so the pinned plate, the sliders, the tray and the dock all fit on a 390x844 phone;
+   on shorter phones the plate shrinks (to a floor) and the controls scroll under it. */
+.cc-pin .k-draw-paper {
+  max-width: min(100%, max(240px, calc(100svh - 500px)));
+  margin-inline: auto;
+}
+.cc-order-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+.cc-order-text {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+}
+.cc-order-text b {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--t-m);
+  line-height: 1.1;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+.cc-hint {
+  margin: 0;
+}
+.cc-compose {
+  gap: var(--s3);
+}
+.cc-dock-cook {
+  padding-top: var(--s3);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s3);
+  align-items: stretch;
+}
+.cc-dock-cook .cc-seg {
+  grid-template-columns: 1fr 1fr;
+  background: var(--surface);
+}
+.cc-dock-cook .cc-seg button {
+  padding: 0 var(--s2);
+}
 .cc-seg {
   display: grid;
   grid-template-columns: 3fr 2fr;
@@ -165,39 +224,39 @@
   background: var(--accent);
   color: var(--accent-ink);
 }
+/* Compact: two sliders side by side, the two buttons under them. */
 .cc-adjust {
   display: grid;
-  gap: var(--s2);
-  padding: var(--s3);
+  grid-template-columns: 1fr 1fr;
+  gap: 0 var(--s3);
+  padding: var(--s1) var(--s3) var(--s2);
   border-radius: var(--r-m);
   background: var(--surface);
 }
 .cc-adjust label {
   display: grid;
-  grid-template-columns: 4.5em 1fr;
-  align-items: center;
-  gap: var(--s3);
+  gap: 0;
 }
 .cc-adjust input[type='range'] {
   width: 100%;
-  min-height: 44px;
+  min-height: 40px;
   accent-color: var(--accent);
   touch-action: pan-y;
 }
 .cc-tray {
   display: flex;
-  gap: var(--s3);
+  gap: var(--s2);
   overflow-x: auto;
-  padding: var(--s3) 2px var(--s3);
+  padding: var(--s2) 2px;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
 }
 .cc-tray-item {
   flex: none;
   display: grid;
-  gap: 4px;
-  width: 84px;
-  padding: 6px;
+  gap: 2px;
+  width: 72px;
+  padding: 4px;
   border-radius: var(--r-s);
   background: var(--cc-paper);
   color: var(--cc-ink);
@@ -212,7 +271,9 @@
   opacity: 0.45;
 }
 .cc-tray-item span {
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* ---- reveal (phone sized by default) ---- */
