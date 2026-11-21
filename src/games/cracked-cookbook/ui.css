@@ -1,0 +1,421 @@
+/* Cracked Cookbook. Motif: index cards with a strip of tape, die-cut stickers on a plate.
+   Tokens only for the shell palette; the card paper and cloth are this game's own props. */
+[data-game='cracked-cookbook'] {
+  --cc-paper: #fff8e6;
+  --cc-ink: #2a1a2e;
+  --cc-tape: rgba(236, 214, 160, 0.88);
+  /* A gingham cloth with a white plate on it. */
+  --cc-plate:
+    radial-gradient(circle, #fffdf7 0 52%, #d9cfb8 52.6% 55.5%, transparent 56%),
+    repeating-conic-gradient(#f0b655 0 25%, #f8d28d 0 50%) 0 0 / 12.5% 12.5%;
+}
+
+/* ---- shared ---- */
+.cc-art {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.cc-empty {
+  padding: var(--s5) 0;
+  text-align: center;
+}
+.cc-tape {
+  display: inline-block;
+  padding: 0.25em 0.9em;
+  background: var(--cc-tape);
+  color: var(--cc-ink);
+  transform: rotate(-1.5deg);
+  clip-path: polygon(0 0, 100% 0, 97% 50%, 100% 100%, 0 100%, 3% 50%);
+}
+.cc-bar {
+  align-items: center;
+}
+
+/* The plate: a square, so stickers are placed in 0..1000 units on both axes. */
+.cc-plate {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--r-m);
+  overflow: hidden;
+  background: var(--cc-plate);
+  box-shadow: 0 0 0 2px var(--line);
+}
+.cc-plate-ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent !important;
+}
+.cc-sticker {
+  position: absolute;
+  min-width: 36px;
+  line-height: 0;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.35));
+}
+.cc-sticker.is-live {
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+/* A bigger invisible hit area, so small stickers stay grabbable by thumb. */
+.cc-sticker.is-live::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+.cc-sticker.is-selected {
+  outline: 3px dashed var(--highlight);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+/* Index card with a strip of tape. */
+.cc-card {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: 10px 10px 8px;
+  border-radius: 4px;
+  background: var(--cc-paper);
+  color: var(--cc-ink);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+  transform: rotate(var(--tilt, 0deg));
+  animation: k-pop var(--d-pop) var(--ease-pop) both;
+}
+.cc-card::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  width: 40%;
+  height: 16px;
+  background: var(--cc-tape);
+  transform: translateX(-50%) rotate(-3deg);
+  clip-path: polygon(0 0, 100% 0, 97% 50%, 100% 100%, 0 100%, 3% 50%);
+}
+.cc-card .cc-art {
+  background: #fff;
+  border-radius: 2px;
+}
+.cc-card-name {
+  font-weight: 700;
+  font-size: var(--t-s);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.cc-card-by {
+  font-family: var(--font-mono);
+  font-size: calc(var(--t-s) * 0.8);
+  color: color-mix(in srgb, var(--cc-ink) 65%, transparent);
+}
+.cc-wall {
+  display: grid;
+  gap: var(--s4);
+  list-style: none;
+  margin: 0;
+  padding: var(--s3) var(--s1);
+}
+.cc-wall-phone {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s3);
+}
+
+.cc-waiting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s4);
+}
+
+/* ---- phone ---- */
+.cc-phone {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s4);
+  align-content: start;
+}
+.cc-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin: 0 calc(var(--gutter) * -1);
+  padding: var(--s5) var(--gutter) calc(var(--safe-b) + var(--s3));
+  background: linear-gradient(to bottom, transparent, var(--bg) 35%);
+}
+.cc-seg {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 0;
+  border: 2px solid var(--line);
+  border-radius: var(--r-m);
+  overflow: hidden;
+}
+.cc-seg button {
+  min-height: var(--tap);
+  padding: 0 var(--s3);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  touch-action: manipulation;
+}
+.cc-seg button.is-on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.cc-adjust {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border-radius: var(--r-m);
+  background: var(--surface);
+}
+.cc-adjust label {
+  display: grid;
+  grid-template-columns: 4.5em 1fr;
+  align-items: center;
+  gap: var(--s3);
+}
+.cc-adjust input[type='range'] {
+  width: 100%;
+  min-height: 44px;
+  accent-color: var(--accent);
+  touch-action: pan-y;
+}
+.cc-tray {
+  display: flex;
+  gap: var(--s3);
+  overflow-x: auto;
+  padding: var(--s3) 2px var(--s3);
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+.cc-tray-item {
+  flex: none;
+  display: grid;
+  gap: 4px;
+  width: 84px;
+  padding: 6px;
+  border-radius: var(--r-s);
+  background: var(--cc-paper);
+  color: var(--cc-ink);
+  font-size: calc(var(--t-s) * 0.85);
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  scroll-snap-align: start;
+  touch-action: manipulation;
+}
+.cc-tray-item:disabled {
+  opacity: 0.45;
+}
+.cc-tray-item span {
+  overflow-wrap: anywhere;
+}
+
+/* ---- reveal (phone sized by default) ---- */
+.cc-stage {
+  min-height: 0;
+}
+.cc-reveal {
+  display: grid;
+  gap: var(--s4);
+  width: 100%;
+}
+.cc-reveal .cc-plate {
+  transform: rotate(-1.5deg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.cc-reveal-info {
+  display: grid;
+  gap: var(--s2);
+  align-content: start;
+}
+.cc-reveal-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--t-xl);
+  font-weight: 400;
+  line-height: 1.05;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+.cc-votes {
+  margin: 0;
+  font-size: var(--t-l);
+}
+.cc-votes b {
+  font-family: var(--font-display);
+  font-weight: 400;
+  color: var(--highlight);
+  font-size: 1.4em;
+}
+.cc-credit {
+  display: grid;
+  gap: var(--s2);
+}
+.cc-board ol {
+  display: grid;
+  gap: var(--s2);
+  margin: var(--s3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.cc-board-row {
+  display: grid;
+  grid-template-columns: 2em 1fr;
+  align-items: center;
+  animation: k-pop var(--d-pop) var(--ease-pop) both;
+}
+.cc-rank {
+  font-family: var(--font-display);
+  color: var(--accent);
+  text-align: center;
+}
+.cc-board .k-chip {
+  width: 100%;
+}
+
+/* ---- screen (vh units: readable from the couch) ---- */
+.cc-screen {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 2.4vh;
+  height: 100%;
+  min-height: 0;
+}
+.cc-screen-reveal {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.cc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3vh;
+}
+.cc-head .g-title {
+  margin: 0.4vh 0 0;
+}
+.cc-screen .cc-tape {
+  font-size: var(--t-s);
+}
+.cc-wall-screen,
+.cc-wall-strip {
+  grid-template-columns: repeat(auto-fill, minmax(17vh, 1fr));
+  gap: 2.6vh;
+  align-content: start;
+  overflow: hidden;
+  padding: 1.4vh;
+}
+.cc-wall-strip {
+  grid-template-columns: repeat(auto-fill, minmax(11vh, 1fr));
+  gap: 1.6vh;
+  max-height: 27vh;
+}
+.cc-screen .cc-card {
+  padding: 1.1vh 1.1vh 0.9vh;
+}
+.cc-screen .cc-card-name,
+.cc-screen .cc-card-by {
+  font-size: var(--t-s);
+}
+.cc-wall-strip .cc-card-by {
+  display: none;
+}
+.cc-orders {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(42vh, 1fr));
+  gap: 1.6vh 2vh;
+  align-content: start;
+  overflow: hidden;
+}
+.cc-order {
+  display: grid;
+  gap: 0.6vh;
+  padding: 1.4vh 2vh;
+  border-radius: var(--r-m);
+  background: var(--stage);
+  box-shadow: inset 0 0 0 2px var(--line);
+}
+.cc-order.is-done {
+  box-shadow: inset 0 0 0 3px var(--accent-2);
+}
+.cc-order-meal {
+  font-family: var(--font-display);
+  font-size: var(--t-m);
+  color: var(--accent);
+  line-height: 1.1;
+}
+.cc-vgrid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 2vh 2vh;
+  min-height: 0;
+}
+.cc-dish {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: center;
+  gap: 0.8vh;
+  min-height: 0;
+  margin: 0;
+  animation: k-pop var(--d-pop) var(--ease-pop) both;
+}
+.cc-dish .cc-plate {
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+}
+.cc-dish figcaption {
+  max-width: 100%;
+  font-size: var(--t-s);
+  text-align: center;
+  line-height: 1.15;
+}
+.cc-num {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+.cc-screen .cc-stage {
+  height: 100%;
+  place-items: center;
+}
+.cc-screen .cc-reveal {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6vh;
+  max-height: 100%;
+}
+.cc-screen .cc-reveal .cc-plate {
+  width: 66vh;
+  max-width: 48vw;
+}
+.cc-screen .cc-reveal-name {
+  font-size: 10vh;
+}
+.cc-screen .cc-votes {
+  font-size: 5vh;
+}
+.cc-screen .cc-board {
+  width: 100%;
+}
+.cc-screen .cc-board ol {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.4vh 4vh;
+}
+.cc-screen .cc-board .k-chip {
+  padding: 0.6vh 2vh 0.6vh 0.6vh;
+  border-radius: 999px;
+  background: var(--stage);
+  font-size: var(--t-m);
+}
