@@ -14,7 +14,7 @@ Resume from the first unit not marked **done**.
 | U5 | Forgery | done (4627db3, merged) | orchestrator reran after merge: `Test Files 5 passed, Tests 139 passed` (forgery 28 incl. leak tests over 3/5/8 players × 5 seeds; contract 71); typecheck + build clean; screenshots `docs/screenshots/forgery-*` reviewed |
 | U6 | Comic Strip Club | done (4adcebd, merged) | orchestrator reran after merge: `Test Files 4 passed, Tests 88 passed` (contract 48 incl. comic-strip-club 3/8/20 × 3 seeds ± screen); typecheck + build clean. Agent's smoke: `PASS comic-strip-club … 2 skips, assets ok (16 ids)`. Remix shipped. UI not yet seen in a browser (U10). |
 | U7 | Cracked Cookbook | in progress (worktree) | |
-| U8 | Wiki-what | in progress (worktree) | |
+| U8 | Wiki-what | done (ad11d29, merged) | orchestrator reran after merge: `Test Files 6 passed, Tests 175 passed` (wiki-what 13 incl. pack validation + answer/Mole leak tests over 3/6/11 players × 3 seeds; contract 94); typecheck + build clean. 220 questions; orchestrator sampled ~20 rows, all plausible. |
 | U9 | Cave Rave | in progress (worktree) | |
 | U10 | Review of games | pending | |
 | U11 | Docs, REPORT.md, draft PR | in progress: Readme, DEPLOY.md, ADDING_A_GAME.md drafted | |
@@ -42,12 +42,13 @@ Resume from the first unit not marked **done**.
 - **Wiki-what live mode (U8).** Builder told to cut it: the VM can't reach Wikipedia, so the network code would ship unverified.
 - **Comic Strip Club (U6).** Chain rotation: round r, player p works chain (p − r) mod n (no repeats at ≥ 4 players; at 3 the author draws panel 3 of their own strip, never back-to-back). Min 3 players. You can't vote for the strip whose prompt you wrote. 100 pts per vote to each distinct contributor. Remix shipped (2–4 bonus strips, no vote).
 - **Forgery (U5).** Ties or no votes accuse nobody (forger escapes). Scoring: forger uncaught +3; caught but guesses word +2; caught and wrong → every artist +1; each artist who voted for the forger +1. Forger leaving mid-round voids the round. Guess is a pick-list sent only to the caught forger. Strokes forced to seat color server-side.
+- **Wiki-what (U8).** 3 rounds × 4 questions, 3–20 players. Team answer = plurality; ties go to the tied choice whose first supporter locked in earliest; no picks = wrong, nobody scores. Right: +2 team, +1 personal per correct picker. Wrong: Mole +3. Mole caught (strictly most accusations): +3 team, +1 per correct accuser; not caught: Mole +3. Final = personal + team total (leavers keep personal only). Personal scores and article titles stay hidden until reveals (both would leak the Mole/answer).
 - **PR tooling.** There is no `gh` CLI for PRs in this container; the draft PR is opened through the GitHub MCP tool instead.
 
 ## Cuts
 
-(none yet)
+- **Wiki-what live random-article mode** (cut order #3): the VM can't reach Wikipedia, so it couldn't be verified; no network code shipped.
 
 ## Unverified
 
-(none yet)
+- **Wiki-what pack accuracy**: 220 questions written from model knowledge without web access; owner should spot-check. Least-sure article titles: "Emperor Norton", "Pig War (1859)", "Bliss (image)", "Comedian (artwork)", "Palais idéal", "Wollemia".
