@@ -11,9 +11,20 @@ The full per-unit evidence, every decision and every cut are in [`plan/LEDGER.md
 | `npm run typecheck` | clean (`tsc -p tsconfig.json` and `tsc -p tsconfig.worker.json`) |
 | `npm test` | `Test Files 8 passed (8)`, `Tests 248 passed (248)` |
 | `npm run build` | `✓ built`; shell `index-*.js 51.78 kB │ gzip 19.06 kB`; each game is its own lazy chunk (largest: Cave Rave, 25.5 kB, 10.1 kB gzip) |
-| `npm run smoke` | SMOKE_RESULT |
+| `npm run smoke` | `smoke: all 6 game(s) passed`, exit 0, no wrangler left running (output below) |
 
 Test files: `contract.test.ts` (140 tests: every game × {min, 8, 20} players × 3 seeds × with/without a screen, plus snapshot/restore, idle-to-finish, stale actions and a player leaving), `engine.test.ts` (30), `forgery.test.ts` (28), `wiki-what.test.ts` (15), `cave-rave.test.ts` (11), `cracked-cookbook.test.ts` (14), `comic-strip-club.test.ts` (8), `strokes.test.ts` (2).
+
+```
+smoke: 6 game(s): tap-duel, forgery, comic-strip-club, wiki-what, cracked-cookbook, cave-rave; 6 players + 1 screen each
+PASS tap-duel room GXQV in 11.2s, 0 skips, no assets
+PASS forgery room DXYF in 48.5s, 4 skips, assets ok (48 ids)
+PASS comic-strip-club room JQDA in 25.9s, 2 skips, assets ok (18 ids)
+PASS wiki-what room ECAF in 131.1s, 3 skips, no assets
+PASS cracked-cookbook room MQUG in 11.8s, 1 skips, assets ok (15 ids)
+PASS cave-rave room KTKM in 105.0s, 2 skips, no assets
+smoke: all 6 game(s) passed
+```
 
 About the smoke "skips": the smoke script presses the host's **Skip** when no view changes for 8 s (for example during a Cave Rave song, whose live scores go over the unstored ephemeral channel, or while waiting on a phase timer). Each skip is printed. No game needed a skip to recover from a stall: the contract test separately proves every game finishes on its own timers with every player idle.
 

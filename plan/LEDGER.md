@@ -17,7 +17,7 @@ Resume from the first unit not marked **done**.
 | U8 | Wiki-what | done (ad11d29, merged) | orchestrator reran after merge: `Test Files 6 passed, Tests 175 passed` (wiki-what 13 incl. pack validation + answer/Mole leak tests over 3/6/11 players × 3 seeds; contract 94); typecheck + build clean. 220 questions; orchestrator sampled ~20 rows, all plausible. |
 | U9 | Cave Rave | done (44bdb30, merged) | orchestrator reran after merge: `Test Files 8 passed, Tests 242 passed` (cave-rave 11: deterministic charts, byes + one champion, score sanity checks, sabotage rules; contract 140); typecheck + build clean (chunk 25.5 kB, 10.1 kB gzip). Agent smoke: `PASS cave-rave … 2 skips` (song plays with no view change; live scores go over ephemeral). |
 | U10 | Review of games | done (e396a92, 64f65cc, 83ef66e, 5801227) | 7 findings fixed: Wiki-what Mole identifiable via who hadn't accused (High); Cookbook dish cooks public via meal map + prop artists (High); Forgery/Wiki-what role cards distinguishable at a glance; Cookbook late-prop race; Cookbook phone cook layout; Cave Rave low-score/high-hits check; display fixes. Browser pass over every game, with and without a screen. Orchestrator reran: `Tests 248 passed` (test diff additions only), typecheck + build clean. Pre-review full smoke (orchestrator): `PASS tap-duel 12.7s, PASS forgery 48.5s (assets ok 48 ids), PASS comic-strip-club 25.9s (assets ok 18 ids), PASS wiki-what 131.4s, PASS cracked-cookbook 11.8s (assets ok 15 ids), PASS cave-rave 105.0s … smoke: all 6 game(s) passed`, exit 0, no wrangler left |
-| U11 | Docs, REPORT.md, draft PR | in progress: docs done; REPORT.md next | |
+| U11 | Docs, REPORT.md, draft PR | done | Readme, docs/DEPLOY.md, docs/ADDING_A_GAME.md, plan/REPORT.md. Final orchestrator run: typecheck clean; `Tests 248 passed`; build clean; smoke `all 6 game(s) passed`, exit 0. Draft PR opened via GitHub MCP. |
 
 ## Decisions
 
@@ -56,5 +56,8 @@ Resume from the first unit not marked **done**.
 - **Wiki-what live random-article mode** (cut order #3): the VM can't reach Wikipedia, so it couldn't be verified; no network code shipped.
 
 ## Unverified
+
+- **Real devices**: Cave Rave audio timing/calibration/iOS unlock, Wake Lock and cellular reconnect were only exercised in headless Chromium and Node clients.
+- **Smoke caution**: running `npm run build` while smoke's `wrangler dev` is up reloads the worker and drops the smoke clients (one orchestrator run stalled this way; rerun undisturbed passed).
 
 - **Wiki-what pack accuracy**: 220 questions written from model knowledge without web access; owner should spot-check. Least-sure article titles: "Emperor Norton", "Pig War (1859)", "Bliss (image)", "Comedian (artwork)", "Palais idéal", "Wollemia".
