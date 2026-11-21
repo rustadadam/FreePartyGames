@@ -15,19 +15,25 @@
   display: grid;
   gap: var(--s2);
 }
+/* Phone: the two sides stack (side by side, a 390 px row leaves a name one letter). */
 .cr-duel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: var(--s2);
+  gap: 0;
   padding: var(--s2) var(--s3);
   border-radius: var(--r-m);
   background: var(--stage);
   border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
 }
 .cr-duel.is-bye {
-  grid-template-columns: minmax(0, 1fr) auto;
   border-style: dashed;
+}
+.cr-duel > .cr-vs {
+  justify-self: start;
+  padding-left: 40px;
+  font-size: calc(var(--t-s) * 0.85);
+  line-height: 1;
 }
 .cr-side {
   position: relative;
@@ -430,9 +436,19 @@
   gap: 1.4vh 2vw;
 }
 .cr-screen .cr-duel {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: var(--s2);
   padding: 1.2vh 1.6vw;
   border-radius: 2vh;
   box-shadow: 0 0 3vh color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.cr-screen .cr-duel.is-bye {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.cr-screen .cr-duel > .cr-vs {
+  justify-self: center;
+  padding-left: 0;
+  font-size: var(--t-s);
 }
 .cr-screen .cr-side {
   padding-bottom: 1vh;

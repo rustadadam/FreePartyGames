@@ -165,9 +165,9 @@ function Player({ view, send, lobby, me }: PlayerProps<WikiView, WikiAction>) {
 
       {view.phase === 'ask' && q && (
         <>
-          {/* Everyone gets the same hidden card, so a glance at a phone cannot spot the Mole's. */}
+          {/* Everyone gets the same compact hidden card, so a glance at a phone cannot spot the Mole's. */}
           {you && (
-            <PromptCard key={`${view.round}-${view.qi}`} secret hidden eyebrow="Your role this round">
+            <PromptCard key={`${view.round}-${view.qi}`} secret hidden eyebrow="Your role this round" class="ww-role">
               {mole && you.answerIndex !== undefined ? (
                 <>
                   You are the Mole. The answer is {MARKS[you.answerIndex]} {q.choices[you.answerIndex]}. Steer the team wrong without getting caught.
