@@ -15,7 +15,7 @@ Resume from the first unit not marked **done**.
 | U6 | Comic Strip Club | done (4adcebd, merged) | orchestrator reran after merge: `Test Files 4 passed, Tests 88 passed` (contract 48 incl. comic-strip-club 3/8/20 × 3 seeds ± screen); typecheck + build clean. Agent's smoke: `PASS comic-strip-club … 2 skips, assets ok (16 ids)`. Remix shipped. UI not yet seen in a browser (U10). |
 | U7 | Cracked Cookbook | done (11e74ad, merged) | orchestrator reran after merge: `Test Files 7 passed, Tests 208 passed` (cookbook 10: hand-only stickers, prop-artist scoring, no self-vote, no hand/author leaks; contract 117); typecheck + build clean; screenshots reviewed (cook screen is long on a phone; canvas scrolls off; flagged for U10) |
 | U8 | Wiki-what | done (ad11d29, merged) | orchestrator reran after merge: `Test Files 6 passed, Tests 175 passed` (wiki-what 13 incl. pack validation + answer/Mole leak tests over 3/6/11 players × 3 seeds; contract 94); typecheck + build clean. 220 questions; orchestrator sampled ~20 rows, all plausible. |
-| U9 | Cave Rave | in progress (worktree) | |
+| U9 | Cave Rave | done (44bdb30, merged) | orchestrator reran after merge: `Test Files 8 passed, Tests 242 passed` (cave-rave 11: deterministic charts, byes + one champion, score sanity checks, sabotage rules; contract 140); typecheck + build clean (chunk 25.5 kB, 10.1 kB gzip). Agent smoke: `PASS cave-rave … 2 skips` (song plays with no view change; live scores go over ephemeral). |
 | U10 | Review of games | pending | |
 | U11 | Docs, REPORT.md, draft PR | in progress: Readme, DEPLOY.md, ADDING_A_GAME.md drafted | |
 
@@ -44,10 +44,14 @@ Resume from the first unit not marked **done**.
 - **Forgery (U5).** Ties or no votes accuse nobody (forger escapes). Scoring: forger uncaught +3; caught but guesses word +2; caught and wrong → every artist +1; each artist who voted for the forger +1. Forger leaving mid-round voids the round. Guess is a pick-list sent only to the caught forger. Strokes forced to seat color server-side.
 - **Wiki-what (U8).** 3 rounds × 4 questions, 3–20 players. Team answer = plurality; ties go to the tied choice whose first supporter locked in earliest; no picks = wrong, nobody scores. Right: +2 team, +1 personal per correct picker. Wrong: Mole +3. Mole caught (strictly most accusations): +3 team, +1 per correct accuser; not caught: Mole +3. Final = personal + team total (leavers keep personal only). Personal scores and article titles stay hidden until reveals (both would leak the Mole/answer).
 - **Cracked Cookbook (U7).** One dealt prompt per drawing round (name editable). Hands: ≤ 6 props by other players (own props only if < 3 others exist). Dish creator +300/vote; each distinct other prop artist on that dish +100/vote. Empty drawings skip the pantry; < 2 dishes skips straight to reveal. Sliders instead of pinch for sticker size/rotation.
+- **Cave Rave (U9).** Calibration lives in the game's get-ready phase (with a Retune button), not the lobby shell. Bye players can't sabotage. Bye goes to the fewest-byes player (rng tie-break). Duel tie-break: present > left, then score, accuracy, rng. Server rejects scores > max, inconsistent hit/miss counts, early (> 2.5 s before song end) or late (> 5 s after) or duplicate submissions. Sabotage: 8 s cooldown; fog 2 s, mirror 3 s, wobble 3 s; no stacking, ≤ 2 active per target. Points: +2 per round cleared, +3 champion. All duels in a round share one song.
+- **Worktree base.** The game worktrees were created from `master` (plan-only); each builder fast-forwarded to `1d9e4aa` (U4 done) before building, so merges were clean except for registry lines, resolved by hand.
 - **PR tooling.** There is no `gh` CLI for PRs in this container; the draft PR is opened through the GitHub MCP tool instead.
 
 ## Cuts
 
+- **Cave Rave drawn beats** (cut order #1): cut to keep the core duel, sync and all three sabotage effects solid.
+- **Cave Rave music on the TV**: not built (not in the plan); TV audio would arrive at a different latency than each phone's.
 - **Wiki-what live random-article mode** (cut order #3): the VM can't reach Wikipedia, so it couldn't be verified; no network code shipped.
 
 ## Unverified
