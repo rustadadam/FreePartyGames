@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import wikiWhat, { type WikiState, type WikiView } from '../src/games/wiki-what/logic';
 import { QUESTIONS } from '../src/games/wiki-what/content';
-import { findLeaks, recordViews, simulateGame } from '../src/core/testkit';
+import { createHarness, findLeaks, recordViews, simulateGame } from '../src/core/testkit';
 
 describe('wiki-what content pack', () => {
   it('is a valid pack of at least 150 questions', () => {
@@ -60,6 +60,19 @@ describe('wiki-what secrets', () => {
           expect(v.roundEnd).toBeNull();
         }
 
+        // Each non-Mole view (and the screen's) is identical whoever else the Mole is.
+        let compared = 0;
+        for (const r of records) {
+          if (!['ask', 'reveal', 'accuse'].includes(r.state.phase) || r.viewerKey === moleOf(r)) continue;
+          const swap = r.state.playerIds.find((id) => id !== moleOf(r) && id !== r.viewerKey);
+          if (!swap) continue;
+          const alt: WikiState = structuredClone(r.state);
+          alt.moles[alt.round - 1] = swap;
+          expect(JSON.stringify(wikiWhat.view(alt, r.viewer)), `${r.viewerKey} at step ${r.step}`).toBe(r.json);
+          compared++;
+        }
+        expect(compared).toBeGreaterThan(0);
+
         const moleAsk = records.filter((r) => r.state.phase === 'ask' && r.viewerKey === moleOf(r));
         expect(moleAsk.length).toBeGreaterThan(0);
         for (const r of moleAsk) expect((r.view as WikiView).you?.answerIndex).toBe(qOf(r).answer);
@@ -82,5 +95,51 @@ describe('wiki-what rules', () => {
     const r = simulateGame(wikiWhat, { players: 5, seed: 5 });
     expect(Object.keys(r.result.scores)).toHaveLength(5);
     expect(Math.min(...Object.values(r.result.scores))).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('wiki-what accusations', () => {
+  // If the Mole could not lock in, the "who has accused" pills (and the phase ending once
+  // everyone else had) would point straight at the Mole.
+  it('the Mole casts a decoy accusation: shown as locked in like anyone, never counted', () => {
+    const h = createHarness({ seed: 7 });
+    h.join('Screen', { role: 'screen' });
+    const ids = Array.from({ length: 5 }, (_, i) => h.join(`P${i + 1}`).id);
+    h.room.runHostCommand({ type: 'selectGame', gameId: 'wiki-what' });
+    h.room.runHostCommand({ type: 'start' });
+    const st = () => h.room.snapshot().game!.state as WikiState;
+    h.runUntil(() => st().phase === 'accuse');
+    const mole = st().moles[0];
+    const team = ids.filter((id) => id !== mole);
+    // Every team member accuses the same innocent player: the phase still waits for the Mole.
+    for (const id of team) h.room.runAction(id, { type: 'accuse', target: id === team[0] ? team[1] : team[0] });
+    expect(st().phase).toBe('accuse');
+    const screenView = wikiWhat.view(st(), { kind: 'screen' }) as WikiView;
+    expect(screenView.voted).not.toContain(mole);
+    // Only once the Mole has cast a decoy does the phase end.
+    h.room.runAction(mole, { type: 'accuse', target: team[1] });
+    const s = st();
+    expect(s.phase).toBe('moleReveal');
+    expect(s.caught).toBe(false);
+    const v = wikiWhat.view(s, { kind: 'screen' }) as WikiView;
+    expect(v.roundEnd?.accuse).not.toHaveProperty(mole);
+  });
+
+  it('a decoy never decides the vote', () => {
+    const h = createHarness({ seed: 3 });
+    const ids = Array.from({ length: 4 }, (_, i) => h.join(`P${i + 1}`).id);
+    h.room.runHostCommand({ type: 'selectGame', gameId: 'wiki-what' });
+    h.room.runHostCommand({ type: 'start' });
+    const st = () => h.room.snapshot().game!.state as WikiState;
+    h.runUntil(() => st().phase === 'accuse');
+    const mole = st().moles[0];
+    const [a, b, c] = ids.filter((id) => id !== mole);
+    // Mole gets 2 real accusations, b gets 1 real + the decoy: the decoy must not make it a tie.
+    h.room.runAction(a, { type: 'accuse', target: mole });
+    h.room.runAction(b, { type: 'accuse', target: mole });
+    h.room.runAction(c, { type: 'accuse', target: b });
+    h.room.runAction(mole, { type: 'accuse', target: b });
+    expect(st().phase).toBe('moleReveal');
+    expect(st().caught).toBe(true);
   });
 });

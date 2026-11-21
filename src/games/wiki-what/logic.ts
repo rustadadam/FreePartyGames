@@ -7,8 +7,9 @@
 //    No picks at all = no team answer (counts as wrong, but nobody scores for it).
 //  - Right team answer: +2 team points. Each player who picked the right choice: +1 personal.
 //  - Each round one secret Mole sees the answer. Team wrong (with an answer given): Mole +3 personal.
-//  - After the round everyone but the Mole accuses a player. Mole is caught if strictly more
-//    players accused them than any other player. Caught: +3 team points and +1 to each correct
+//  - After the round everyone accuses a player. The Mole accuses too, as a decoy that never
+//    counts, so who has locked in (and when the phase ends) cannot single the Mole out. The Mole
+//    is caught if strictly more players accused them than any other player. Caught: +3 team points and +1 to each correct
 //    accuser. Not caught: Mole +3 personal. Personal points stay hidden until the Mole reveal.
 //  - Final score = personal points + the whole team total, for everyone who stayed.
 //  - The article title is hidden until the reveal (titles often give the answer away).
@@ -179,7 +180,8 @@ function resolveQuestion(s: WikiState, ctx: GameCtx): void {
 function resolveAccuse(s: WikiState, ctx: GameCtx): void {
   const mole = currentMole(s);
   const counts: Record<string, number> = {};
-  for (const t of Object.values(s.accuse)) add(counts, t, 1);
+  // The Mole's own accusation is a decoy: it never counts.
+  for (const [p, t] of Object.entries(s.accuse)) if (p !== mole) add(counts, t, 1);
   const mine = counts[mole] ?? 0;
   const others = Math.max(0, ...Object.entries(counts).filter(([id]) => id !== mole).map(([, n]) => n));
   s.caught = mine > 0 && mine > others;
@@ -204,8 +206,8 @@ function checkDone(s: WikiState, ctx: GameCtx): void {
   if (s.phase === 'ask') {
     if (present(s).every((p) => s.picks[p] !== undefined)) resolveQuestion(s, ctx);
   } else if (s.phase === 'accuse') {
-    const mole = currentMole(s);
-    if (present(s).every((p) => p === mole || s.accuse[p] !== undefined)) resolveAccuse(s, ctx);
+    // Everyone, the Mole included: waiting on "everyone but one" would point at the Mole.
+    if (present(s).every((p) => s.accuse[p] !== undefined)) resolveAccuse(s, ctx);
   }
 }
 
@@ -263,7 +265,7 @@ export default defineGame<WikiState, WikiAction, WikiSettings>({
       s.picks[playerId] = a.choice;
       s.order.push(playerId);
     } else {
-      if (s.phase !== 'accuse' || playerId === currentMole(s) || s.accuse[playerId] !== undefined) return;
+      if (s.phase !== 'accuse' || s.accuse[playerId] !== undefined) return;
       if (a.target === playerId || !s.playerIds.includes(a.target)) return;
       s.accuse[playerId] = a.target;
     }
@@ -348,7 +350,10 @@ export default defineGame<WikiState, WikiAction, WikiSettings>({
       voted: s.phase === 'ask' ? s.order : s.phase === 'accuse' ? Object.keys(s.accuse) : [],
       you,
       reveal,
-      roundEnd: roundOver ? { mole, caught: s.caught, accuse: s.accuse, gain: s.roundGain } : null,
+      // The Mole's decoy accusation is left out: only accusations that counted are shown.
+      roundEnd: roundOver
+        ? { mole, caught: s.caught, accuse: Object.fromEntries(Object.entries(s.accuse).filter(([p]) => p !== mole)), gain: s.roundGain }
+        : null,
       scores: roundOver ? totals(s) : null,
     };
   },
@@ -373,7 +378,8 @@ export default defineGame<WikiState, WikiAction, WikiSettings>({
         }
         return { type: 'pick', choice: rng.int(4) };
       }
-      if (v.phase === 'accuse' && !v.you.mole && v.you.accused === null && rng.chance(0.7)) {
+      // The Mole bot casts its decoy too.
+      if (v.phase === 'accuse' && v.you.accused === null && rng.chance(0.7)) {
         const others = v.players.filter((p) => p !== me);
         if (others.length) return { type: 'accuse', target: rng.pick(others) };
       }

@@ -120,11 +120,14 @@ export interface CookView {
   round: number;
   rounds: number;
   deadline: number | null;
-  pantry: { id: number; asset: string; name: string; by: string }[];
+  /** `by` (the prop's artist) only from the reveal on: with it, the props on a dish (never the
+   *  cook's own) would narrow down who cooked it. */
+  pantry: { id: number; asset: string; name: string; by?: string }[];
   /** Players the phase is still waiting on. */
   waiting: string[];
-  /** Who is cooking what (cook phase). */
-  meals: Record<string, string> | null;
+  /** The meals on order (cook phase), sorted and never paired with a cook: each dish shows its
+   *  meal in the vote, so a public cook-to-meal map would name every dish's cook. */
+  orders: string[] | null;
   dishes: DishView[];
   reveal: { startAt: number; interval: number; order: number[]; detail: DishResult[] } | null;
   scores: Record<string, number> | null;
@@ -372,9 +375,9 @@ export default defineGame<CookState, CookAction, Record<string, never>>({
       round: s.round,
       rounds: DRAW_ROUNDS,
       deadline: s.phase === 'done' ? null : s.deadline,
-      pantry: s.props.map((p, i) => ({ id: i, asset: p.asset, name: p.name, by: p.by })),
+      pantry: s.props.map((p, i) => ({ id: i, asset: p.asset, name: p.name, ...(revealed ? { by: p.by } : {}) })),
       waiting,
-      meals: s.phase === 'cook' ? s.meals : null,
+      orders: s.phase === 'cook' ? s.playerIds.map((id) => s.meals[id] ?? '').filter(Boolean).sort() : null,
       // Who cooked a dish stays hidden until the reveal.
       dishes: showDishes
         ? s.dishes.map((d, i) => ({

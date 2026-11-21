@@ -82,7 +82,7 @@ function PantryWall({ pantry, assets, lobby, class: cls }: { pantry: Pantry; ass
         <li key={p.id} class="cc-card" style={{ '--tilt': `${((p.id * 37) % 7) - 3}deg` }}>
           <Art asset={p.asset} assets={assets} label={p.name} />
           <span class="cc-card-name">{p.name}</span>
-          <span class="cc-card-by">{playerOf(lobby, p.by)?.name ?? 'Someone'}</span>
+          {p.by && <span class="cc-card-by">{playerOf(lobby, p.by)?.name ?? 'Someone'}</span>}
         </li>
       ))}
     </ul>
@@ -488,9 +488,10 @@ function Screen({ view, lobby, assets: _shared }: ScreenProps<CookView>) {
   }
 
   if (view.phase === 'cook') {
-    const ids = Object.keys(view.meals ?? {});
+    // Cooks and orders stay unpaired: each dish shows its meal in the vote.
+    const cooks = lobby.inGame;
     return (
-      <section class="cc-screen">
+      <section class="cc-screen cc-screen-cook">
         <header class="cc-head">
           <div>
             <p class="cc-tape eyebrow">{phaseLabel(view)}</p>
@@ -499,13 +500,19 @@ function Screen({ view, lobby, assets: _shared }: ScreenProps<CookView>) {
           <Timer deadline={view.deadline} total={COOK_MS} size="l" />
         </header>
         <div class="cc-orders">
-          {ids.map((id) => {
+          {(view.orders ?? []).map((meal, i) => (
+            <div key={i} class="cc-order">
+              <span class="cc-order-meal">{meal}</span>
+            </div>
+          ))}
+        </div>
+        <div class="cc-cooks" aria-label="Cooks">
+          {cooks.map((id) => {
             const done = !view.waiting.includes(id);
             return (
-              <div key={id} class={`cc-order${done ? ' is-done' : ''}`}>
+              <span key={id} class={`cc-cook${done ? ' is-done' : ''}`}>
                 <PlayerChip lobby={lobby} id={id} size="4vh" trailing={done ? 'Served' : null} />
-                <span class="cc-order-meal">{view.meals?.[id]}</span>
-              </div>
+              </span>
             );
           })}
         </div>

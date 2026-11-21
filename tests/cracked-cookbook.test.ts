@@ -168,3 +168,35 @@ describe('cracked cookbook: views', () => {
     }
   });
 });
+
+describe('cracked cookbook: anonymous dishes', () => {
+  // Each dish shows its meal in the vote, and a dish never uses its cook's own props: so before
+  // the reveal no view may pair a player with a meal, or say who drew a prop.
+  for (const seed of [1, 2, 3]) {
+    it(`no cook-to-meal or prop-to-artist pairing before the reveal (seed ${seed})`, () => {
+      const { records } = recordViews<CookState>(game, { players: 5, seed, screen: true });
+      let swapped = 0;
+      for (const r of records) {
+        const v = r.view as CookView;
+        if (v.phase === 'reveal' || v.phase === 'done') continue;
+        for (const p of v.pantry) expect(p).not.toHaveProperty('by');
+        if (v.phase === 'cook') {
+          expect(Array.isArray(v.orders)).toBe(true);
+          expect(v.orders).toEqual([...v.orders!].sort());
+          for (const other of r.state.playerIds) if (other !== r.viewerKey) expect(r.json).not.toContain(`"${other}":"`);
+        }
+        if (v.phase === 'vote') {
+          // Swapping the cooks of two dishes neither of which is the viewer's changes nothing.
+          const others = r.state.dishes.map((d, i) => (d.by === r.viewerKey ? -1 : i)).filter((i) => i >= 0);
+          if (others.length < 2) continue;
+          const alt: CookState = structuredClone(r.state);
+          const [i, j] = others;
+          [alt.dishes[i].by, alt.dishes[j].by] = [alt.dishes[j].by, alt.dishes[i].by];
+          expect(JSON.stringify(game.view(alt, r.viewer))).toBe(r.json);
+          swapped++;
+        }
+      }
+      expect(swapped).toBeGreaterThan(0);
+    });
+  }
+});

@@ -218,7 +218,8 @@ export function scoreProblem(s: CRState, now: number, playerId: string, a: { due
   if (now < s.endAt - EARLY_SUBMIT_MS) return 'too early';
   if (a.score > s.chart.max) return 'above max';
   if (a.hits + a.misses > s.chart.notes) return 'too many notes';
-  if (a.score > a.hits * PERFECT_PTS || a.score % GOOD_PTS !== 0) return 'inconsistent';
+  // Every hit is a perfect or a good: hits * GOOD_PTS <= score <= hits * PERFECT_PTS.
+  if (a.score > a.hits * PERFECT_PTS || a.score < a.hits * GOOD_PTS || a.score % GOOD_PTS !== 0) return 'inconsistent';
   return null;
 }
 

@@ -165,9 +165,16 @@ function Player({ view, send, lobby, me }: PlayerProps<WikiView, WikiAction>) {
 
       {view.phase === 'ask' && q && (
         <>
-          {mole && you?.answerIndex !== undefined && (
-            <PromptCard secret hidden eyebrow="Mole's eyes only" tone="accent" footer="Steer the team wrong without getting caught.">
-              {MARKS[you.answerIndex]} {q.choices[you.answerIndex]}
+          {/* Everyone gets the same hidden card, so a glance at a phone cannot spot the Mole's. */}
+          {you && (
+            <PromptCard key={`${view.round}-${view.qi}`} secret hidden eyebrow="Your role this round">
+              {mole && you.answerIndex !== undefined ? (
+                <>
+                  You are the Mole. The answer is {MARKS[you.answerIndex]} {q.choices[you.answerIndex]}. Steer the team wrong without getting caught.
+                </>
+              ) : (
+                'You are on the team. Find the answer, and watch for whoever steers you wrong.'
+              )}
             </PromptCard>
           )}
           <div class="g-panel ww-q">
@@ -186,7 +193,9 @@ function Player({ view, send, lobby, me }: PlayerProps<WikiView, WikiAction>) {
             ))}
           </div>
           <p class="g-muted">
-            {you?.pick != null ? `Locked in. ${view.players.length - view.voted.length} still thinking.` : 'Pick one. The team answer is the most popular pick.'}
+            {you?.pick != null
+              ? `Locked in. ${Math.max(0, view.players.length - view.gone.length - view.voted.length)} still thinking.`
+              : 'Pick one. The team answer is the most popular pick.'}
           </p>
           {!room && <Pills ids={view.players} lobby={lobby} voted={view.voted} size="28px" />}
         </>
@@ -205,19 +214,15 @@ function Player({ view, send, lobby, me }: PlayerProps<WikiView, WikiAction>) {
       {view.phase === 'accuse' && (
         <>
           <h2 class="g-title">Who was the Mole?</h2>
+          <p class="g-muted">One of you saw the answers and may have steered the team wrong. Most accusations wins.</p>
+          <Vote
+            label="Who was the Mole?"
+            value={you?.accused ?? null}
+            onVote={(id) => send({ type: 'accuse', target: id })}
+            options={others.map((id) => ({ id, label: playerOf(lobby, id)?.name ?? '?', color: playerOf(lobby, id)?.color }))}
+          />
           <p class="g-muted">
-            {mole ? 'You are the Mole. Sit tight while the others accuse.' : 'One of you saw the answers and may have steered the team wrong. Most accusations wins.'}
-          </p>
-          {!mole && (
-            <Vote
-              label="Who was the Mole?"
-              value={you?.accused ?? null}
-              onVote={(id) => send({ type: 'accuse', target: id })}
-              options={others.map((id) => ({ id, label: playerOf(lobby, id)?.name ?? '?', color: playerOf(lobby, id)?.color }))}
-            />
-          )}
-          <p class="g-muted">
-            {view.voted.length} of {view.players.length - 1} accused
+            {view.voted.length} of {view.players.length - view.gone.length} accused
           </p>
         </>
       )}
@@ -284,8 +289,8 @@ function Rules() {
         Everyone answers strange-but-true questions from Wikipedia. The team answer is the most popular pick. A tie goes to the choice locked in first.
       </p>
       <p>
-        Each round one player is secretly the Mole and sees the answers. The Mole wants the team to get it wrong. After each round, everyone else accuses a
-        player.
+        Each round one player is secretly the Mole and sees the answers. The Mole wants the team to get it wrong. After each round, everyone accuses a
+        player. The Mole accuses too, to blend in, but that accusation does not count.
       </p>
       <p>
         Right team answer: 2 team points, plus 1 for each player who picked it. Wrong team answer: the Mole gets 3. Catch the Mole (strictly the most accusations)

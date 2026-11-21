@@ -238,13 +238,26 @@ function RevealPanel({ view, lobby, me, big }: { view: V; lobby: Lobby; me?: str
 function SecretCard({ view }: { view: V }) {
   const you = view.you;
   if (!you) return null;
-  return you.role === 'forger' ? (
-    <PromptCard secret tone="accent" eyebrow={`Category · ${view.category}`} footer="Blend in. Nobody may find out you cannot see the word.">
-      You are the forger
-    </PromptCard>
-  ) : (
-    <PromptCard secret eyebrow="Your secret word" footer={`Category · ${view.category}. Hint at it, do not give it away.`}>
-      {you.word}
+  // Both cards share one look (tone, eyebrow, footer shape), so a glance at a phone, shown or
+  // hidden, cannot tell the forger's card from an artist's.
+  return (
+    <PromptCard
+      key={view.round}
+      secret
+      eyebrow="Your secret card"
+      footer={`Category · ${view.category}`}
+    >
+      {you.role === 'forger' ? (
+        <>
+          You are the forger
+          <span class="fg-card-note">Blend in. Nobody may find out you cannot see the word.</span>
+        </>
+      ) : (
+        <>
+          {you.word}
+          <span class="fg-card-note">Hint at it. Do not give it away.</span>
+        </>
+      )}
     </PromptCard>
   );
 }

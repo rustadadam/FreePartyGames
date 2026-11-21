@@ -110,6 +110,8 @@ describe('cave-rave scores', () => {
     caveRave.onAction(s, f.ctx, d.a, { type: 'score', duel: d.id, score: max + PERFECT_PTS, hits: n, misses: 0 });
     caveRave.onAction(s, f.ctx, d.a, { type: 'score', duel: 'r9d0', score: 100, hits: 1, misses: 0 });
     caveRave.onAction(s, f.ctx, d.a, { type: 'score', duel: d.id, score: 300, hits: 1, misses: 0 });
+    // Hits worth less than a "good" each: a padded accuracy for the tie-break.
+    caveRave.onAction(s, f.ctx, d.a, { type: 'score', duel: d.id, score: 0, hits: n, misses: 0 });
     expect(d.subs[d.a]).toBeUndefined();
     caveRave.onAction(s, f.ctx, d.a, { type: 'score', duel: d.id, score: max, hits: n, misses: 0 });
     expect(d.subs[d.a]?.score).toBe(max);
