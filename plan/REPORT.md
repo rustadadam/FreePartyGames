@@ -101,5 +101,5 @@ The full list, with reasons, is under **Decisions** in `plan/LEDGER.md`. The one
 - **Persistence:** seats, tokens, host, phase and scores are written in the same event; other game changes at most once a second.
 - **Dev bots** are on locally (`npm run worker`, smoke) and off in deploys.
 - **Cave Rave calibration** lives in the game's get-ready phase rather than the lobby, so core stays game-agnostic.
-- **Cave Rave** was built by an Opus game-builder from the start (the most complex game); the other four used Sonnet, and none needed a retry.
+- **Cave Rave** was built by an Opus game-builder from the start (the most complex game); the other four used Sonnet. No builder failed a unit; three (Cracked Cookbook, Wiki-what, Cave Rave) and the U4 reviewer were paused by account usage limits and resumed from where they stopped.
 - **Each game's scoring** is stated in its Rules screen and in the ledger.
