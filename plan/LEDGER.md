@@ -16,7 +16,7 @@ Resume from the first unit not marked **done**.
 | U7 | Cracked Cookbook | done (11e74ad, merged) | orchestrator reran after merge: `Test Files 7 passed, Tests 208 passed` (cookbook 10: hand-only stickers, prop-artist scoring, no self-vote, no hand/author leaks; contract 117); typecheck + build clean; screenshots reviewed (cook screen is long on a phone; canvas scrolls off; flagged for U10) |
 | U8 | Wiki-what | done (ad11d29, merged) | orchestrator reran after merge: `Test Files 6 passed, Tests 175 passed` (wiki-what 13 incl. pack validation + answer/Mole leak tests over 3/6/11 players × 3 seeds; contract 94); typecheck + build clean. 220 questions; orchestrator sampled ~20 rows, all plausible. |
 | U9 | Cave Rave | done (44bdb30, merged) | orchestrator reran after merge: `Test Files 8 passed, Tests 242 passed` (cave-rave 11: deterministic charts, byes + one champion, score sanity checks, sabotage rules; contract 140); typecheck + build clean (chunk 25.5 kB, 10.1 kB gzip). Agent smoke: `PASS cave-rave … 2 skips` (song plays with no view change; live scores go over ephemeral). |
-| U10 | Review of games | pending | |
+| U10 | Review of games | in progress | Pre-review full smoke (orchestrator): `PASS tap-duel 12.7s, PASS forgery 48.5s (assets ok 48 ids), PASS comic-strip-club 25.9s (assets ok 18 ids), PASS wiki-what 131.4s, PASS cracked-cookbook 11.8s (assets ok 15 ids), PASS cave-rave 105.0s … smoke: all 6 game(s) passed`, exit 0, no wrangler left |
 | U11 | Docs, REPORT.md, draft PR | in progress: Readme, DEPLOY.md, ADDING_A_GAME.md drafted | |
 
 ## Decisions
