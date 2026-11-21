@@ -8,4 +8,5 @@ export const clientGames: Record<string, () => Promise<ClientGameModule>> = {
   forgery: () => import('./forgery/ui').then((m) => m.default),
   'comic-strip-club': () => import('./comic-strip-club/ui').then((m) => m.default),
   'wiki-what': () => import('./wiki-what/ui').then((m) => m.default),
+  'cracked-cookbook': () => import('./cracked-cookbook/ui').then((m) => m.default),
 };

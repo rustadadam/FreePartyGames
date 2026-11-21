@@ -4,10 +4,12 @@ import tapDuel from './_template/logic';
 import forgery from './forgery/logic';
 import comicStripClub from './comic-strip-club/logic';
 import wikiWhat from './wiki-what/logic';
+import crackedCookbook from './cracked-cookbook/logic';
 
 export const serverGames: GameRegistry = {
   [tapDuel.manifest.id]: tapDuel,
   [forgery.manifest.id]: forgery,
   [comicStripClub.manifest.id]: comicStripClub,
   [wikiWhat.manifest.id]: wikiWhat,
+  [crackedCookbook.manifest.id]: crackedCookbook,
 };
