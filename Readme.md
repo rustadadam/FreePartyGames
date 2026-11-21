@@ -14,7 +14,7 @@ This repo has all of the public source code for you to build your own games to p
 
 1. Open the site on a laptop or TV and tap **Use this screen as the TV**, or tap **Host from my phone** if there's no shared screen.
 2. Friends scan the QR code, tap the texted link, or type the 4-letter room code on the home page.
-3. The host picks a game and starts it. Everyone plays on their phones; 3 to 20 players.
+3. The host picks a game and starts it. Everyone plays on their phones: up to 20 players (Cave Rave needs 2, the others 3).
 
 Phones keep their seat if they lock or drop off: reopen the link and you're back in the same seat with the same score.
 
