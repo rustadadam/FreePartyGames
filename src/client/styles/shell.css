@@ -567,54 +567,43 @@ button.host-option:active:not(:disabled) {
 }
 
 /* ---- Settings (lobby only, on the device that plays the room's audio) ----
-   A quiet card: a disclosure row, then two switches split by the ticket's perforation. */
+   A gear; tapping it drops the two switches down below it. */
 .settings {
-  border: 2px solid var(--line);
-  border-radius: var(--r-m);
-  background: var(--surface);
+  display: grid;
+  justify-items: end;
+  gap: var(--s2);
 }
-.settings-head {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  width: 100%;
-  min-height: var(--tap);
-  padding: var(--s2) var(--s4);
-  border: 0;
-  border-radius: inherit;
-  background: none;
-  text-align: left;
+.settings-gear {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
   touch-action: manipulation;
 }
-.settings-icon {
-  flex: none;
-  width: 1.4em;
-  height: 1.4em;
+.settings-gear svg {
+  width: 55%;
+  height: 55%;
+  transition: transform var(--d-fast) var(--ease-out);
+}
+.settings-gear[aria-expanded='true'] {
+  border-color: var(--accent);
   color: var(--accent);
 }
-.settings-text {
-  flex: 1;
-  display: grid;
-  min-width: 0;
-}
-.settings-title {
-  font-weight: 700;
-  font-size: var(--t-m);
-}
-.settings-sum {
-  color: var(--muted);
-  font-size: var(--t-s);
-}
-.settings-caret {
-  font-family: var(--font-mono);
-  font-size: var(--t-l);
-  line-height: 1;
-  color: var(--muted);
+.settings-gear[aria-expanded='true'] svg {
+  transform: rotate(60deg);
 }
 .settings-panel {
   display: grid;
-  padding: 0 var(--s4) var(--s2);
-  border-top: 2px dashed var(--line);
+  width: min(100%, 340px);
+  padding: 0 var(--s4);
+  border: 2px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
 }
 .switch-row {
   display: flex;
@@ -670,24 +659,23 @@ button.host-option:active:not(:disabled) {
   background: var(--accent-ink);
   transform: translate(1.2em, -50%);
 }
-/* TV: pinned top-right of the lobby (the ticket column is full); the panel opens over the wall. */
+/* TV: the gear sits top-right of the lobby; the panel drops down over the player wall. */
 .screen-settings {
   position: absolute;
   top: 4.5vh;
   right: 4.5vw;
   z-index: 5;
-  width: 48vh;
-  border-radius: 1.6vh;
+  gap: 1.2vh;
 }
-.screen-settings.is-open {
-  box-shadow: 0 3vh 6vh -1vh rgb(0 0 0 / 0.6);
+.screen-settings .settings-gear {
+  width: 7vh;
+  height: 7vh;
 }
-.screen-settings .settings-head,
 .screen-settings .settings-panel {
+  width: 48vh;
   padding-inline: 2.2vh;
-}
-.screen-settings .settings-head {
-  gap: 1.6vh;
+  border-radius: 1.6vh;
+  box-shadow: 0 3vh 6vh -1vh rgb(0 0 0 / 0.6);
 }
 
 /* =========================================================

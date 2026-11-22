@@ -10,24 +10,23 @@ export function SoundSettings({ class: cls = '' }: { class?: string }) {
   const m = useMusicState();
   const [open, setOpen] = useState(false);
   if (!fx.device) return null;
-  const summary =
-    m.enabled && m.blocked
-      ? 'Tap anywhere to start the sound'
-      : `Music ${m.enabled ? 'on' : 'off'} · Sound effects ${fx.enabled ? 'on' : 'off'}`;
   return (
-    <section class={`settings${open ? ' is-open' : ''} ${cls}`} aria-label="Settings">
-      <button type="button" class="settings-head" aria-expanded={open} aria-controls="settings-panel" onClick={() => setOpen(!open)}>
-        <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path fill="currentColor" d="M4 9h4l5-4v14l-5-4H4z" />
-          <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11" />
+    <section class={`settings ${cls}`} aria-label="Settings">
+      <button
+        type="button"
+        class="settings-gear"
+        aria-label="Settings"
+        aria-expanded={open}
+        aria-controls="settings-panel"
+        onClick={() => setOpen(!open)}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path
+            fill="currentColor"
+            fill-rule="evenodd"
+            d="M10.3 2h3.4l.5 2.6a8 8 0 0 1 1.9 1.1l2.5-.9 1.7 2.9-2 1.7a8 8 0 0 1 0 2.2l2 1.7-1.7 2.9-2.5-.9a8 8 0 0 1-1.9 1.1l-.5 2.6h-3.4l-.5-2.6a8 8 0 0 1-1.9-1.1l-2.5.9-1.7-2.9 2-1.7a8 8 0 0 1 0-2.2l-2-1.7 1.7-2.9 2.5.9a8 8 0 0 1 1.9-1.1zM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
+          />
         </svg>
-        <span class="settings-text">
-          <span class="settings-title">Settings</span>
-          <span class="settings-sum">{summary}</span>
-        </span>
-        <span class="settings-caret" aria-hidden="true">
-          {open ? '−' : '+'}
-        </span>
       </button>
       {open && (
         <div class="settings-panel" id="settings-panel">
