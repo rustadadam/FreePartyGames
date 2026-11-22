@@ -66,6 +66,15 @@ for (const [id, def] of Object.entries(serverGames)) {
       }
     }
 
+    it('finishes with every setting at its smallest and at its largest', () => {
+      for (const settings of ['min', 'max'] as const) {
+        for (const players of [def.manifest.minPlayers, Math.min(def.manifest.maxPlayers, 8)]) {
+          const report = simulateGame(def, { players, seed: 5, screen: def.manifest.screen !== 'none', maxSteps: MAX_STEPS, settings });
+          expect(report.result).not.toBeNull();
+        }
+      }
+    });
+
     it('survives snapshot/restore (hibernation) every few steps', () => {
       const players = def.manifest.minPlayers;
       const report = simulateGame(def, {

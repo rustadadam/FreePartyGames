@@ -9,6 +9,7 @@ A game plugs in through one contract, `GameDefinition` in `src/core/game.ts`, an
 3. **Write the logic** in `logic.ts`. It stays pure TypeScript: no DOM, no Cloudflare, no `Math.random` or `Date.now` (use `ctx.rng` and `ctx.now()`).
    - `actionSchema`: a strict zod schema for every action a phone can send. Nothing reaches `onAction` without passing it.
    - `setup(ctx, players, settings)` returns the initial state. State must be plain JSON: it is snapshotted when the room hibernates.
+   - `defaultSettings` and `settingsFields`: what the host may change in the lobby (see **Game settings** below).
    - `onAction(state, ctx, playerId, action)` and `onTimer(state, ctx, key)` mutate the state in place.
    - `onPlayerLeave` / `onPlayerReturn`: the game must never wait on a player who left.
    - `view(state, viewer)` projects the state for one viewer (`{kind:'player', id}` or `{kind:'screen'}`). **Hide every secret here.** Keep views under 64 KB: reference drawings by asset id.
@@ -28,6 +29,32 @@ A game plugs in through one contract, `GameDefinition` in `src/core/game.ts`, an
 7. **Test it.** `npm test` runs `tests/contract.test.ts` over every registered game. Add `tests/my-game.test.ts` for your game's own rules, and for any secret use `recordViews()` / `findLeaks()` from `src/core/testkit.ts`.
 8. **Play it.** `npm run build && npm run worker`, open `http://localhost:8787`, host a room, and use **Add bots**. `npm run smoke` plays every game end to end over real WebSockets.
 
+## Game settings
+
+Anything the host might want to tune (rounds, seconds per phase) is a setting. A game declares them; the shell renders them. A game never ships settings UI.
+
+1. **Declare the fields** next to `defaultSettings` in `logic.ts`. Every field is a number the host steps up and down:
+   ```ts
+   export interface MySettings { rounds: number; answerSeconds: number }
+
+   const settingsFields: SettingField[] = [
+     { key: 'rounds', label: 'Rounds', hint: 'One Mole per round', min: 1, max: 5, step: 1 },
+     { key: 'answerSeconds', label: 'Answer time', hint: 'Per question', min: 10, max: 60, step: 5, unit: 's' },
+   ];
+
+   export default defineGame<MyState, MyAction, MySettings>({
+     defaultSettings: { rounds: 3, answerSeconds: 25 },
+     settingsFields,
+     // ...
+   });
+   ```
+   `SettingField` is in `src/shared/types.ts`: `key` (a key of `defaultSettings`), `label`, optional `hint` and `unit`, and `min`, `max`, `step`. Every default must sit inside its range and on its step (`min + n * step`). Leave `settingsFields` out for a game with nothing to tune.
+2. **Read them in `setup(ctx, players, settings)`** and copy what you need into the state. The room passes `defaultSettings` overlaid with the host's picks, already clamped to the fields, so you never validate against the manifest yourself. Name time settings in seconds and multiply by 1000 once, in `setup`. Keep the old `*_MS` constant as the default (`defaultSettings: { answerSeconds: ASK_MS / 1000 }`).
+3. **Put anything the UI needs in the view.** The UI cannot see settings. If a phase length is now a setting, expose it (`askMs: s.askMs`) and give it to `Timer` as `total`. Never hard-code the old constant in `ui.tsx`.
+4. **Nothing else.** Core sends the fields and current values to the lobby, validates and clamps the host's `setSetting` command, remembers each game's picks for the life of the room (they survive hibernation and the next game), and refuses changes while a game is running. The menu's **Game settings** section shows them to the host in the lobby and on the results screen.
+
+Keep to a few settings per game: the ones a group would plausibly change (length of the game, time pressure). Not every game needs them.
+
 ## What the contract test enforces
 
 For every registered game, with and without a screen:
@@ -38,7 +65,8 @@ For every registered game, with and without a screen:
 - at least two different players act;
 - with every player idle, the game still ends on its own timers, so give every phase a deadline;
 - the game survives a snapshot and restore every few steps, with identical views afterwards;
-- stale or out-of-turn actions don't throw, and a player leaving mid-game doesn't stall it.
+- stale or out-of-turn actions don't throw, and a player leaving mid-game doesn't stall it;
+- every settings field names a key of `defaultSettings`, every default fits its field, and the game still finishes with every setting at its minimum and at its maximum.
 
 Don't weaken this test to get green. Fix the game.
 

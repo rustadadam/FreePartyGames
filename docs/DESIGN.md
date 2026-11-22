@@ -264,10 +264,15 @@ is connected. Every other phone stays silent: `sfx.play` there does nothing, so 
 from `Player` and `Screen`. Audio starts after the first tap anywhere (browser rule). A TV that
 rejoins mid-game in Safari stays silent until someone taps it.
 
-**Settings.** A Settings card with **Music** and **Sound effects** switches appears only in
-the lobby, and only on the audio device: pinned top-right on the TV, at the end of the lobby on
-the host's phone. Both are on by default and saved on that device (`fpg:music`, `fpg:sfx`), so
-choices made in the lobby carry into games.
+**Menu.** One gear on every device (`RoomMenu`, `src/client/app/RoomMenu.tsx`, icon from
+`lucide-preact`) opens one panel, top to bottom: **Game settings** (the host, between games, when
+the selected game declares `settingsFields`: a stepper per field), **Sound** (the **Music** and
+**Sound effects** switches, only on the audio device) and the device's room actions (phone: share,
+skip ahead, end game, leave room; TV: skip ahead and end game, for the host). The gear sits in the
+phone header, top-right of the TV lobby, and at the end of the TV's footer rail in a game, where the
+panel opens upward. Both sound switches are on by default and saved on that device (`fpg:music`,
+`fpg:sfx`), so choices made in the lobby carry into games. Game settings live in the room, not on
+the device: see **Game settings** in `docs/ADDING_A_GAME.md`.
 
 **Ducking.** Music and effects share one `AudioContext` (`src/client/audio/engine.ts`). A big
 stinger (`start`, `fanfare`, a game's verdict sting) drops the music to 30% for the length of the

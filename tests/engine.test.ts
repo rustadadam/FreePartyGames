@@ -394,3 +394,39 @@ describe('testkit leak helpers', () => {
     expect(findLeaks(records, (r) => (r.viewerKey === 'screen' ? { exact: [p1], text: ['REVEAL'] } : null)).length).toBeGreaterThan(0);
   });
 });
+
+describe('game settings', () => {
+  const fieldOf = (key: string) => tapDuel.settingsFields!.find((f) => f.key === key)!;
+
+  it('the lobby lists the selected game\'s fields and values, defaults first', () => {
+    const { h } = hostPlayerRoom(1);
+    const s = h.lobby().settings!;
+    expect(s.gameId).toBe(GAME);
+    expect(s.fields.map((f) => f.key)).toEqual(['rounds']);
+    expect(s.values).toEqual({ rounds: 3 });
+  });
+
+  it('setSetting is host-only, validated and clamped to the field', () => {
+    const { h, host, rest } = hostPlayerRoom(1);
+    h.send(rest[0], { type: 'host', cmd: { type: 'setSetting', key: 'rounds', value: 5 } });
+    expect(rest[0].last('error')?.code).toBe('not_host');
+    h.send(host, { type: 'host', cmd: { type: 'setSetting', key: 'nope', value: 5 } });
+    expect(host.last('error')?.code).toBe('bad_command');
+    h.send(host, { type: 'host', cmd: { type: 'setSetting', key: 'rounds', value: 99 } });
+    expect(h.lobby().settings!.values.rounds).toBe(fieldOf('rounds').max);
+    h.send(host, { type: 'host', cmd: { type: 'setSetting', key: 'rounds', value: 2.4 } });
+    expect(h.lobby().settings!.values.rounds).toBe(2);
+  });
+
+  it('the game starts with the host\'s picks, and the picks survive a restore and a new game', () => {
+    const { h, host } = hostPlayerRoom(1);
+    h.send(host, { type: 'host', cmd: { type: 'setSetting', key: 'rounds', value: 5 } });
+    h.restart();
+    h.send(host, { type: 'host', cmd: { type: 'start' } });
+    expect((h.room.snapshot().game!.state as TapState).rounds).toBe(5);
+    h.send(host, { type: 'host', cmd: { type: 'setSetting', key: 'rounds', value: 1 } });
+    expect(host.last('error')?.code).toBe('bad_command'); // not while a game is running
+    h.send(host, { type: 'host', cmd: { type: 'returnToLobby' } });
+    expect(h.lobby().settings!.values.rounds).toBe(5);
+  });
+});

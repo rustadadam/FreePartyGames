@@ -194,6 +194,8 @@ export interface SimulateOptions {
    * or handle it without throwing, and still finish.
    */
   staleActions?: boolean;
+  /** Before the start, set every settings field of the game to its smallest or largest value (via the host command). */
+  settings?: 'min' | 'max';
   /** Called with every view computed for every viewer (see recordViews). */
   onView?(record: ViewRecord): void;
 }
@@ -295,6 +297,9 @@ export function simulateGame(def: AnyGame, opts: SimulateOptions): SimulateRepor
   }
   cmd({ type: 'addBots', count: opts.players });
   cmd({ type: 'selectGame', gameId: id });
+  if (opts.settings) {
+    for (const f of def.settingsFields ?? []) cmd({ type: 'setSetting', key: f.key, value: opts.settings === 'min' ? f.min : f.max });
+  }
   cmd({ type: 'start' });
   const playerIds = [...h.lobby().inGame];
   const viewers: Viewer[] = [...playerIds.map((p): Viewer => ({ kind: 'player', id: p })), ...(opts.screen ? [{ kind: 'screen' } as Viewer] : [])];
