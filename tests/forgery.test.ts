@@ -5,6 +5,7 @@ import { createHarness, findLeaks, recordViews, type RoomHarness, type TestClien
 import forgery, { type ForgeryState, type ForgeryView } from '../src/games/forgery/logic';
 import { CATEGORIES } from '../src/games/forgery/content';
 import { POINTS } from '../src/games/forgery/rules';
+import { GUESS_WORDS, normalizeGuess, suggestWords } from '../src/games/forgery/words';
 
 // ---------- content ----------
 
@@ -29,6 +30,27 @@ describe('forgery content', () => {
         expect(w.replace(/ /g, ''), w).not.toMatch(/^[a-f]+$/);
       }
     }
+  });
+});
+
+describe('forgery guess list', () => {
+  it('holds every secret word, so the right answer can always be typed', () => {
+    for (const c of CATEGORIES) for (const w of c.words) expect(GUESS_WORDS, w).toContain(w);
+  });
+
+  it('is long, clean and unique', () => {
+    expect(GUESS_WORDS.length).toBeGreaterThanOrEqual(1000);
+    expect(new Set(GUESS_WORDS).size).toBe(GUESS_WORDS.length);
+    for (const w of GUESS_WORDS) expect(w, w).toMatch(/^[a-z]+( [a-z]+)*$/);
+  });
+
+  it('suggests words that start with what was typed first, then words that contain it', () => {
+    const got = suggestWords('Pan', 50);
+    expect(got.length).toBeGreaterThan(1);
+    const firstContaining = got.findIndex((w) => !w.startsWith('pan'));
+    if (firstContaining >= 0) for (const w of got.slice(firstContaining)) expect(w).not.toMatch(/^pan/);
+    expect(suggestWords('')).toEqual([]);
+    expect(normalizeGuess('  Hot   DOG ')).toBe('hot dog');
   });
 });
 
@@ -134,7 +156,7 @@ describe('forgery rules', () => {
     for (const a of artists) expect(s.gain[a]).toBe(POINTS.sharpEye);
   });
 
-  it('only the caught forger can guess, and only from the category', () => {
+  it('only the caught forger can guess; typing the word in any case and spacing still steals the win', () => {
     const r = rig(3);
     drawAll(r);
     const { forger, playerIds } = r.st();
@@ -142,8 +164,10 @@ describe('forgery rules', () => {
     voteAll(r, (v) => (v === forger ? artists[0] : forger));
     r.act(artists[0], { type: 'guess', word: r.st().word });
     expect(r.st().phase).toBe('guess');
-    r.act(forger, { type: 'guess', word: 'definitely not in the list' });
+    r.act(forger, { type: 'guess', word: '   ' });
     expect(r.st().phase).toBe('guess');
+    r.act(forger, { type: 'guess', word: `  ${r.st().word.toUpperCase().replace(/ /g, '   ')} ` });
+    expect(r.st().outcome).toBe('stolen');
   });
 
   it('rotates the forger and ends after min(players, 4) rounds', () => {
@@ -220,14 +244,8 @@ describe('forgery secret leaks', () => {
         }
         expect(compared).toBeGreaterThan(0);
 
-        // 4. The pick-list (it contains the word) reaches only the forger, only while guessing.
-        for (const r of records) {
-          const v = r.view as ForgeryView;
-          if (v.options) {
-            expect(r.viewerKey).toBe(r.state.forger);
-            expect(r.state.phase).toBe('guess');
-          }
-        }
+        // 4. No word list is ever sent: the guess is typed, so nothing in a view narrows it.
+        for (const r of records) expect(r.view).not.toHaveProperty('options');
       });
     }
   }

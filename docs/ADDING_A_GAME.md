@@ -24,8 +24,9 @@ A game plugs in through one contract, `GameDefinition` in `src/core/game.ts`, an
    // src/games/registry.client.ts
    'my-game': () => import('./my-game/ui').then((m) => m.default),
    ```
-6. **Test it.** `npm test` runs `tests/contract.test.ts` over every registered game. Add `tests/my-game.test.ts` for your game's own rules, and for any secret use `recordViews()` / `findLeaks()` from `src/core/testkit.ts`.
-7. **Play it.** `npm run build && npm run worker`, open `http://localhost:8787`, host a room, and use **Add bots**. `npm run smoke` plays every game end to end over real WebSockets.
+6. **Add music (optional).** Drop an MP3 named after the game id into `songs/` (`songs/my-game.mp3`). The TV, or the host's phone when there's no TV, loops it during the game; the lobby plays `songs/lobby.mp3`. A game without a file plays in silence. No code change is needed, and `tests/songs.test.ts` fails if a file's name matches no game.
+7. **Test it.** `npm test` runs `tests/contract.test.ts` over every registered game. Add `tests/my-game.test.ts` for your game's own rules, and for any secret use `recordViews()` / `findLeaks()` from `src/core/testkit.ts`.
+8. **Play it.** `npm run build && npm run worker`, open `http://localhost:8787`, host a room, and use **Add bots**. `npm run smoke` plays every game end to end over real WebSockets.
 
 ## What the contract test enforces
 

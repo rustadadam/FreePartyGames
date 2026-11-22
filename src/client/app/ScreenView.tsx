@@ -4,6 +4,7 @@ import type { RoomClient } from '../net/room';
 import { ConfirmButton } from './ConfirmButton';
 import { GameStage } from './GameStage';
 import { AddBots, GamePicker, PlayerWall, SelectedGame, StartButton } from './Lobby';
+import { MusicToggle } from './MusicToggle';
 import { Results } from './Results';
 import { prettyUrl, Ticket } from './Ticket';
 
@@ -19,6 +20,7 @@ export function ScreenView({ client, lobby, view }: { client: RoomClient; lobby:
           <p class="screen-howto">
             Join on your phone: scan the code, or go to <strong>{location.host}</strong> and type <strong>{lobby.code}</strong>.
           </p>
+          <MusicToggle class="screen-music" />
         </div>
         <div class="screen-lobby-side">
           <section class="screen-who" aria-labelledby="who-title">
@@ -64,6 +66,7 @@ export function ScreenView({ client, lobby, view }: { client: RoomClient; lobby:
         <span class="rail-join">
           Join at <strong>{prettyUrl(lobby.code)}</strong>
         </span>
+        <MusicToggle />
         {isHost && (
           <span class="rail-host">
             {lobby.phase === 'playing' ? (

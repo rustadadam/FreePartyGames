@@ -6,6 +6,7 @@ import type { RoomClient } from '../net/room';
 import { ConfirmButton } from './ConfirmButton';
 import { GameStage } from './GameStage';
 import { AddBots, GamePicker, hostName, PlayerWall, SelectedGame, StartButton } from './Lobby';
+import { MusicToggle } from './MusicToggle';
 import { Results } from './Results';
 import { ShareButton, Ticket, TicketStub } from './Ticket';
 
@@ -49,6 +50,7 @@ export function PlayerView({ client, lobby, view, meId }: { client: RoomClient; 
               />
             </>
           )}
+          <MusicToggle class="btn-block" />
           <ShareButton code={lobby.code} class="btn-block" />
           <ConfirmButton class="btn-block btn-ghost" label="Leave room" confirm="Tap again to leave" onConfirm={() => client.leave()} />
         </div>

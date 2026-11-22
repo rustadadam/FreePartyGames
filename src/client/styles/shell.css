@@ -730,6 +730,9 @@ button.host-option:active:not(:disabled) {
   gap: 1.2vh;
   margin-left: auto;
 }
+.music-toggle[aria-pressed='false'] {
+  color: var(--muted);
+}
 
 /* =========================================================
    Game stage

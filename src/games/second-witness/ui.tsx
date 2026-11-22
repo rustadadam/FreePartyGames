@@ -23,10 +23,10 @@ import {
 import './ui.css';
 
 const OUTCOME_LABEL: Record<Outcome, string> = {
-  single: 'Single witness',
-  second: 'Second witness',
-  half: 'One of two',
-  none: 'No witness',
+  single: 'Matched',
+  second: 'Both matched',
+  half: 'One of two matched',
+  none: 'No match',
   blank: 'No answer',
 };
 
@@ -47,7 +47,7 @@ function Header({ view }: { view: SWView }) {
     <div class="g-spread sw-head">
       <span class="sw-head-id">
         <Temple />
-        <span class="eyebrow">{over ? 'Final tally' : `Chapter ${view.round} of ${view.rounds}`}</span>
+        <span class="eyebrow">{over ? 'Final scores' : `Round ${view.round} of ${view.rounds}`}</span>
       </span>
       {!over && (
         <span class="sw-mult" aria-label={`Score multiplier ${view.mult}`}>
@@ -62,7 +62,7 @@ function Header({ view }: { view: SWView }) {
 /** The prompt, engraved like a chapter heading. */
 function Chapter({ view, size, compact }: { view: SWView; size?: 'l'; compact?: boolean }) {
   return (
-    <PromptCard eyebrow={`Chapter ${view.round}`} size={size ?? 'm'} tone="accent" class={`sw-plate sw-chapter${compact ? ' is-compact' : ''}`}>
+    <PromptCard eyebrow={`Round ${view.round}`} size={size ?? 'm'} tone="accent" class={`sw-plate sw-chapter${compact ? ' is-compact' : ''}`}>
       {view.prompt.text}
       <Temple class="sw-watermark" />
     </PromptCard>
@@ -82,7 +82,7 @@ function Marks({ n }: { n: number }) {
 function Pills({ view, lobby, size }: { view: SWView; lobby: Lobby; size: string }) {
   const here = view.players.filter((p) => !view.gone.includes(p));
   return (
-    <div class="sw-pills" aria-label={view.phase === 'merge' ? 'Who is done' : 'Who has locked in'}>
+    <div class="sw-pills" aria-label={view.phase === 'merge' ? 'Who is done' : 'Who has submitted'}>
       {here.map((id) => {
         const p = playerOf(lobby, id);
         return (
@@ -125,10 +125,10 @@ function WriteForm({ view, send }: { view: SWView; send(a: SWAction): void }) {
   const m = view.mult;
   const hint =
     n === 0
-      ? `One answer is the safe play: ${POINTS.single} if someone writes it too. Two is a gamble: ${POINTS.second} if both match, ${POINTS.half} if only one does.`
+      ? `Write one answer to play it safe: ${POINTS.single * m} points if someone else writes it too. Write two to gamble: ${POINTS.second * m} points if both match, ${POINTS.half * m} if only one does.`
       : n === 1
-        ? `Safe play: ${POINTS.single * m} points if someone else wrote it too.`
-        : `Gamble: ${POINTS.second * m} if both match, ${POINTS.half * m} if only one does, 0 if neither.`;
+        ? `One answer: ${POINTS.single * m} points if someone else wrote it too.`
+        : `Two answers: ${POINTS.second * m} points if both match, ${POINTS.half * m} if only one does, 0 if neither.`;
   const lock = (e: Event) => {
     e.preventDefault();
     if (list.length) send({ type: 'submit', answers: list });
@@ -159,10 +159,10 @@ function WriteForm({ view, send }: { view: SWView; send(a: SWAction): void }) {
           </label>
         ))}
       </form>
-      <p class={`sw-hint${same ? ' is-warn' : ''}`}>{same ? 'Those two are the same answer, so they count as one.' : hint}</p>
+      <p class={`sw-hint${same ? ' is-warn' : ''}`}>{same ? 'Those two answers are the same, so they count as one.' : hint}</p>
       <div class="sw-dock">
         <button type="submit" form="sw-form" class="btn btn-primary btn-block" disabled={!list.length}>
-          {n === 2 ? 'Lock in both answers' : 'Lock in my answer'}
+          {n === 2 ? 'Submit both answers' : 'Submit answer'}
         </button>
       </div>
     </>
@@ -179,7 +179,7 @@ function WritePlayer({ view, send, lobby }: { view: SWView; send(a: SWAction): v
         <>
           <Verses view={view} answers={mine} />
           <p class="sw-hint">
-            Locked in. {Math.max(0, hereCount(view) - view.locked.length)} still writing. Nobody sees any answers until everyone is in or time runs out.
+            Answer submitted. Waiting for {Math.max(0, hereCount(view) - view.locked.length)} more. Answers stay hidden until everyone has submitted or time runs out.
           </p>
           <Pills view={view} lobby={lobby} size="30px" />
         </>
@@ -223,7 +223,7 @@ function ProposalRow({
         <b>{la}</b> <span class="sw-eq">=</span> <b>{lb}</b>?
       </p>
       <p class="sw-prop-tally">
-        <span class="sw-yes">{p.yes} yes</span> <span class="sw-no">{p.no} no</span> <span class="g-muted">· needs {need}</span>
+        <span class="sw-yes">{p.yes} same</span> <span class="sw-no">{p.no} different</span> <span class="g-muted">· needs {need}</span>
       </p>
       {onVote &&
         (p.mine === null ? (
@@ -264,7 +264,7 @@ function MergePlayer({ view, send }: { view: SWView; send(a: SWAction): void }) 
       <Chapter view={view} compact />
       <h2 class="sw-h">Same answer?</h2>
       <p class="g-muted sw-lede">
-        Plates are anonymous. Tap two that mean the same thing and propose them. {m.need} yes votes make a match.
+        These are everyone's answers, with no names. Tap two plates that mean the same thing, then propose a match. A match needs {m.need} Same votes.
       </p>
       {open.length > 0 && (
         <ul class="sw-props">
@@ -280,7 +280,7 @@ function MergePlayer({ view, send }: { view: SWView; send(a: SWAction): void }) 
       </div>
       {(blocked || dup || full) && two && (
         <p class="sw-hint is-warn">
-          {blocked ? 'One player wrote both of those, so they cannot be the same.' : dup ? 'That one is already up for a vote or was voted down.' : `You already have ${MAX_OPEN_PROPOSALS} open proposals.`}
+          {blocked ? 'One player wrote both of these, so they can’t be merged.' : dup ? 'This pair is already being voted on, or was voted down.' : `You already have ${MAX_OPEN_PROPOSALS} proposals open. Wait for a vote to finish.`}
         </p>
       )}
       <div class="sw-dock">
@@ -298,12 +298,12 @@ function MergePlayer({ view, send }: { view: SWView; send(a: SWAction): void }) 
                 setPicked([]);
               }}
             >
-              Propose these two
+              Propose a match
             </button>
           </div>
         ) : (
           <button type="button" class="btn btn-primary btn-block" disabled={done} onClick={() => send({ type: 'done' })}>
-            {done ? `Done. ${wait} still deciding` : sel.length === 1 ? 'Pick a second plate, or tap Done' : 'I am done'}
+            {done ? `Done. Waiting for ${wait} more.` : sel.length === 1 ? 'Pick a second plate, or tap Done' : 'Done'}
           </button>
         )}
       </div>
@@ -340,7 +340,7 @@ function RevealPlate({ g, lobby, big }: { g: NonNullable<SWView['reveal']>['grou
           );
         })}
       </ul>
-      <p class="sw-verdict">{n >= 2 ? `${n} witnesses` : 'No second witness'}</p>
+      <p class="sw-verdict">{n >= 2 ? `${n} players wrote this` : 'Only one player wrote this'}</p>
     </div>
   );
 }
@@ -353,7 +353,7 @@ function RoundScores({ view, lobby, me, big }: { view: SWView; lobby: Lobby; me?
   return (
     <div class="sw-scores">
       <p class="eyebrow">
-        Chapter {view.round} &middot; &times;{view.mult}
+        Round {view.round} &middot; &times;{view.mult}
       </p>
       <RevealStage
         class="sw-score-list"
@@ -398,7 +398,7 @@ function RevealPlayer({ view, lobby, me }: { view: SWView; lobby: Lobby; me: str
           <RoundScores view={view} lobby={lobby} me={me} />
         </>
       ) : (
-        <p class="sw-hint">{r.groups.length ? 'Who wrote what, smallest groups first…' : 'Nobody wrote anything this round.'}</p>
+        <p class="sw-hint">{r.groups.length ? 'Showing who wrote what, smallest groups first.' : 'Nobody wrote anything this round.'}</p>
       )}
       {r.groups.length > 0 && (
         <RevealStage
@@ -465,7 +465,7 @@ function FinalBoard({ view, lobby, me, big }: { view: SWView; lobby: Lobby; me?:
                 <span class="sw-thinker-body">
                   <span class="eyebrow">Unique thinker</span>
                   <b>{id === me ? 'You' : (p?.name ?? 'Someone')}</b>
-                  <span class="sw-also">{view.twoZero[id]} chapters with two answers and no witness</span>
+                  <span class="sw-also">{view.twoZero[id]} rounds with two answers and no match</span>
                 </span>
                 <span class="sw-thinker-pts">+{UNIQUE_BONUS}</span>
               </li>
@@ -542,7 +542,7 @@ function Screen({ view, lobby }: ScreenProps<SWView>) {
           </div>
           <aside class="sw-merge-right">
             <h2 class="sw-h">Same answer?</h2>
-            <p class="g-muted">Tap two plates on your phone to propose a match. {m.need} yes votes make it stick.</p>
+            <p class="g-muted">On your phone, tap two plates that mean the same thing and propose a match. A match needs {m.need} Same votes.</p>
             {m.proposals.length > 0 ? (
               <ul class="sw-props">
                 {m.proposals.map((p) => (
@@ -567,11 +567,11 @@ function Screen({ view, lobby }: ScreenProps<SWView>) {
       <div class="sw-stage sw-write-screen">
         <Chapter view={view} size="l" />
         <p class="sw-stage-hint">
-          Write one answer or two on your phone. Hope somebody writes the same. {view.mult > 1 ? `This chapter scores ×${view.mult}.` : ''}
+          Write one or two answers on your phone. You score when someone else writes the same answer. {view.mult > 1 ? `This round scores ×${view.mult}.` : ''}
         </p>
         <Pills view={view} lobby={lobby} size="8vh" />
         <p class="g-muted">
-          {view.locked.length} of {hereCount(view)} locked in
+          {view.locked.length} of {hereCount(view)} submitted
         </p>
       </div>
     </section>
@@ -581,22 +581,22 @@ function Screen({ view, lobby }: ScreenProps<SWView>) {
 function Rules() {
   return (
     <RulesSheet
-      story="A good answer is one a second witness will vouch for. Everyone gets the same chapter heading, and you each write what you think the others will write."
+      story="It is an old rule that a matter is settled by the mouth of two witnesses. Here, an answer only counts if someone else wrote it too. Each round, you all get the same category, and everyone secretly writes what they think the others will write."
       how={[
-        'Each chapter shows a category. Everyone secretly writes one or two answers, up to 40 characters each. One is the safe play. Two is the gamble.',
-        'Matching answers are grouped automatically. Capitals, punctuation, accents and plurals do not matter, so "Temple" and "the temples" are the same.',
-        'The groups then appear as plates with no names. Tap two plates to propose that they mean the same thing, and everyone votes. Yes votes from more than half of the players present merge them, and merges can chain. You cannot merge two plates if one player wrote both.',
-        'Then the plates are revealed with the players who wrote them, and the points are paid. The host can skip ahead at any time.',
+        'Each round shows a category. Everyone secretly writes one or two answers, up to 40 characters each. One answer is the safe play. Two answers is the gamble.',
+        'Matching answers are grouped for you. Capitals, punctuation, accents and plurals do not matter, so "Temple" and "the temples" match.',
+        'Next, the groups appear as plates with no names. If two plates mean the same thing, tap both and propose a match. Everyone votes Same or Different. If more than half of the players here vote Same, the plates merge. You cannot merge two plates if one player wrote both.',
+        'Then every plate is revealed with the players who wrote it, and points are paid out. Later rounds are worth more.',
       ]}
       scoring={[
-        `One answer that someone else also wrote: ${POINTS.single} points (single witness)`,
-        `Two answers, both matched: ${POINTS.second} points (second witness)`,
+        `One answer that someone else also wrote: ${POINTS.single} points`,
+        `Two answers, both matched: ${POINTS.second} points`,
         `Two answers, only one matched: ${POINTS.half} point`,
-        'Nothing matched, or no answer: 0',
-        `There are ${MULTIPLIERS.length} chapters, scoring ×${MULTIPLIERS.join(', ×')} in order`,
-        `Unique thinker: score nothing in ${UNIQUE_MIN_ROUNDS} or more chapters where you wrote two answers, and you get a flat +${UNIQUE_BONUS} at the end`,
+        'Nothing matched, or no answer: 0 points',
+        `There are ${MULTIPLIERS.length} rounds. Points are multiplied by ×${MULTIPLIERS.join(', ×')} in order`,
+        `Unique thinker: if you wrote two answers and scored nothing in ${UNIQUE_MIN_ROUNDS} or more rounds, you get +${UNIQUE_BONUS} at the end`,
       ]}
-      note="Nobody sees anyone else's answers until the writing is over. If a player leaves, the vote only counts the players still here."
+      note="Nobody sees anyone else's answers until the writing is over. If a player leaves, votes only count the players still here."
     />
   );
 }

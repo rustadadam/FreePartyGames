@@ -256,3 +256,17 @@
     animation: none;
   }
 }
+
+/* The forger's guess: a text box with the matching words beneath it. */
+.fg-guess {
+  display: grid;
+  gap: var(--s3);
+}
+.fg-matches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

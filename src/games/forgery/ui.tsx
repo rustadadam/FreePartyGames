@@ -9,6 +9,7 @@ import type { ClientGameModule, PlayerProps, ScreenProps } from '../../client/ga
 import type { Lobby } from '../../shared/types';
 // Type-only import from logic.ts: a value import would pull zod and the game logic into this chunk.
 import type { ForgeryAction, ForgeryView } from './logic';
+import { GUESS_WORDS, normalizeGuess, suggestWords } from './words';
 import { ASPECT, GUESS_MS, LAPS, POINTS, REVEAL_MS, REVEAL_STEP_MS, STROKE_W, TURN_MS, VOTE_MS } from './rules';
 import './ui.css';
 
@@ -262,6 +263,60 @@ function SecretCard({ view }: { view: V }) {
   );
 }
 
+/** The forger's last chance: type the word, pick it from the matches, and lock it in. One guess. */
+function GuessBox({ onGuess }: { onGuess(word: string): void }) {
+  const [text, setText] = useState('');
+  const [sent, setSent] = useState(false);
+  const typed = normalizeGuess(text);
+  const matches = suggestWords(text);
+  const valid = GUESS_WORDS.includes(typed);
+  const submit = () => {
+    if (!valid || sent) return;
+    setSent(true);
+    onGuess(typed);
+  };
+  return (
+    <form
+      class="fg-guess"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
+      <label class="field">
+        <span class="eyebrow">Type the word</span>
+        <input
+          class="input"
+          value={text}
+          disabled={sent}
+          onInput={(e) => setText(e.currentTarget.value)}
+          maxLength={40}
+          placeholder="Start typing…"
+          autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellcheck={false}
+          enterKeyHint="go"
+        />
+      </label>
+      {!sent && matches.length > 0 && !(matches.length === 1 && matches[0] === typed) && (
+        <ul class="fg-matches" aria-label="Matching words">
+          {matches.map((w) => (
+            <li key={w}>
+              <button type="button" class="btn btn-s" onClick={() => setText(w)}>
+                {w}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button class="btn btn-primary btn-block" disabled={!valid || sent}>
+        {sent ? 'Guess sent' : valid ? `Guess “${typed}”` : 'Pick a word from the matches'}
+      </button>
+    </form>
+  );
+}
+
 function Player({ view, send, me, lobby }: PlayerProps<V, ForgeryAction>) {
   const seated = view.players.includes(me);
   const others = view.players.filter((id) => id !== me && !view.gone.includes(id));
@@ -299,13 +354,8 @@ function Player({ view, send, me, lobby }: PlayerProps<V, ForgeryAction>) {
       <>
         {isForger ? (
           <>
-            <p class="fg-status is-me">They found you. Guess the word to steal the win.</p>
-            <Vote
-              label="Guess the word"
-              value={null}
-              onVote={(word) => send({ type: 'guess', word })}
-              options={(view.options ?? []).map((w) => ({ id: w, label: w }))}
-            />
+            <p class="fg-status is-me">They found you. Type the word to steal the win.</p>
+            <GuessBox onGuess={(word) => send({ type: 'guess', word })} />
           </>
         ) : (
           <>
@@ -392,7 +442,7 @@ function Rules() {
         'Everyone gets a category, like Kitchen tools. Everyone except the forger also gets a secret word from that category. The forger sees only the category.',
         'Take turns drawing one line on the shared canvas, to show you know the word. Go around the table twice.',
         'Vote on who you think the forger is. The player with the most votes is accused. If votes are tied, nobody is.',
-        'If the forger is accused, they get one last chance: pick the word from a list. A right guess steals the win.',
+        'If the forger is accused, they get one last chance: type the word. A right guess steals the win.',
       ]}
       scoring={[
         <>The forger gets away (or the vote is tied): forger +{POINTS.escaped}</>,

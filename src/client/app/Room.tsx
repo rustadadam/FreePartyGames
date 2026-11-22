@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { RoomContext, useRoomState } from '../net/context';
 import type { EndReason, RoomClient, RoomState } from '../net/room';
+import { useRoomMusic } from './music';
 import { PlayerView } from './PlayerView';
 import { ScreenView } from './ScreenView';
 import { useWakeLock } from './wakeLock';
@@ -29,6 +30,11 @@ export function Room({ client, onExit, onRejoin }: { client: RoomClient; onExit(
   const state = useRoomState(client);
   // Phones and the TV both stay awake: a laptop screen dimming mid-game is as bad as a phone locking.
   useWakeLock(state.status !== 'ended');
+  // One device per room plays music: the TV, or the host's phone when no TV is connected.
+  const playsMusic =
+    !state.ended &&
+    (state.you?.kind === 'screen' || (state.you?.kind === 'player' && client.isHost && !state.lobby?.screenConnected));
+  useRoomMusic(state.lobby ?? null, playsMusic);
 
   if (state.ended) {
     const e = ENDED[state.ended];

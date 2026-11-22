@@ -4,12 +4,12 @@
 // A round: everyone but the forger gets a category and a secret word; the forger gets only the
 // category. Players take turns (LAPS laps, fixed shuffled order), one continuous stroke each on a
 // shared canvas, in their seat color. Then everyone votes for the forger. A forger who is
-// caught gets one guess at the word (a pick-list of the category's words).
+// caught gets one typed guess at the word (the UI offers type-ahead from a long word list).
 //
 // Secrets: the word lives only in `state.word` and in the views of the artists. The forger's
 // identity lives only in `state.forger` and in the forger's own view; it is projected to
-// everyone else only once the vote is in (phases guess / reveal / done). The pick-list (which
-// contains the word) goes only to the forger, and only in the guess phase. Live ink (ephemeral)
+// everyone else only once the vote is in (phases guess / reveal / done). No word list is ever
+// sent: the guess is free text, checked against the word here. Live ink (ephemeral)
 // carries just {turn, by, pts}, the same for every drawer.
 import { z } from 'zod';
 import { defineGame, type GameCtx } from '../../core/game';
@@ -17,6 +17,7 @@ import { MAX_ID_LENGTH } from '../../shared/limits';
 import { makeDrawing, STROKE_UNITS, strokeBoxHeight, type Stroke } from '../../shared/strokes';
 import { StrokeSchema } from '../../shared/strokeSchema';
 import { CATEGORIES } from './content';
+import { GUESS_WORDS, normalizeGuess } from './words';
 import { ASPECT, GUESS_MS, LAPS, MAX_PLAYERS, MAX_ROUNDS, MIN_PLAYERS, POINTS, REVEAL_MS, STROKE_W, TURN_MS, VOTE_MS } from './rules';
 
 const MAX_Y = strokeBoxHeight(ASPECT);
@@ -105,8 +106,6 @@ export interface ForgeryView {
   myVote: string | null;
   /** Only the viewing player's own card. Null for the screen and spectators. */
   you: { role: 'artist' | 'forger'; word: string | null } | null;
-  /** Forger only, guess phase only: the category's words to pick from. */
-  options: string[] | null;
   /** From the end of the vote on (the forger is known by then, or the round is over). */
   result: {
     votes: Record<string, string>;
@@ -124,7 +123,6 @@ export interface ForgeryView {
 }
 
 const present = (s: ForgeryState): string[] => s.playerIds.filter((id) => !s.gone.includes(id));
-const wordsOf = (s: ForgeryState): string[] => [...CATEGORIES[s.category].words].sort();
 
 function clearRoundTimers(ctx: GameCtx): void {
   for (const k of ['turn', 'vote', 'guess', 'next']) ctx.clearTimer(k);
@@ -305,9 +303,10 @@ export default defineGame<ForgeryState, ForgeryAction, ForgerySettings>({
       }
       case 'guess': {
         if (s.phase !== 'guess' || playerId !== s.forger) return;
-        if (!CATEGORIES[s.category].words.includes(action.word)) return;
-        s.guess = action.word;
-        endRound(s, ctx, action.word === s.word ? 'stolen' : 'caught');
+        const guess = normalizeGuess(action.word);
+        if (!guess) return;
+        s.guess = guess;
+        endRound(s, ctx, guess === s.word ? 'stolen' : 'caught');
         return;
       }
     }
@@ -369,7 +368,6 @@ export default defineGame<ForgeryState, ForgeryAction, ForgerySettings>({
       voted: s.phase === 'vote' ? Object.keys(s.votes) : [],
       myVote: me && s.phase === 'vote' ? (s.votes[me] ?? null) : null,
       you: me ? { role: isForger ? 'forger' : 'artist', word: isForger ? null : s.word } : null,
-      options: isForger && s.phase === 'guess' ? wordsOf(s) : null,
       result: voteOver ? { votes: s.votes, tally: s.tally, accused: s.accused } : null,
       reveal: showReveal && s.outcome ? { forger: s.forger, word: s.word, guess: s.guess, outcome: s.outcome, gain: s.gain } : null,
     };
@@ -401,7 +399,7 @@ export default defineGame<ForgeryState, ForgeryAction, ForgerySettings>({
         const others = v.players.filter((id) => id !== me && !v.gone.includes(id));
         return others.length ? { type: 'vote', target: rng.pick(others) } : null;
       }
-      if (v.phase === 'guess' && v.options?.length) return { type: 'guess', word: rng.pick(v.options) };
+      if (v.phase === 'guess' && v.you?.role === 'forger') return { type: 'guess', word: rng.pick(GUESS_WORDS) };
       return null;
     },
   },

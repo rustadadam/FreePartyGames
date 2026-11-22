@@ -301,7 +301,7 @@ export default defineGame<SWState, SWAction, Record<string, never>>({
   manifest: {
     id: 'second-witness',
     title: 'Second Witness',
-    tagline: 'Write what others will write. Two answers, or play it safe?',
+    tagline: 'A matching game: write what the others will write.',
     minPlayers: MIN_PLAYERS,
     maxPlayers: MAX_PLAYERS,
     screen: 'optional',
@@ -461,7 +461,7 @@ export default defineGame<SWState, SWAction, Record<string, never>>({
       scores,
       summary: names
         ? `${names} Unique thinker${names > 1 ? 's' : ''} earned the +${UNIQUE_BONUS} bonus`
-        : 'Six rounds of looking for a second witness',
+        : 'Six rounds of hoping someone wrote the same thing',
     };
   },
 
