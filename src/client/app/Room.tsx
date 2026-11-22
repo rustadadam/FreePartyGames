@@ -60,7 +60,7 @@ export function Room({ client, onExit, onRejoin }: { client: RoomClient; onExit(
         {!state.lobby || !state.you ? (
           <main class="arriving" aria-busy="true">
             <span class="ticket-mini">{client.code}</span>
-            <p>{state.status === 'reconnecting' ? 'Trying to reach the room…' : 'Getting your ticket…'}</p>
+            <p>{state.status === 'reconnecting' ? 'Trying to reach the room…' : 'Joining the room…'}</p>
           </main>
         ) : state.you.kind === 'screen' ? (
           <ScreenView client={client} lobby={state.lobby} view={state.view} />

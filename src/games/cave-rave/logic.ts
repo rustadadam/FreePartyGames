@@ -248,7 +248,7 @@ export default defineGame<CRState, CRAction, Record<string, never>>({
   manifest: {
     id: 'cave-rave',
     title: 'Cave Rave',
-    tagline: 'Rhythm duels in the dark. Losers get to meddle.',
+    tagline: 'A rhythm tournament where the losers get to sabotage.',
     minPlayers: 2,
     maxPlayers: 20,
     screen: 'optional',

@@ -67,13 +67,13 @@ export function Home({ initialCode = '', onEnter }: { initialCode?: string; onEn
           <br />
           Games
         </h1>
-        <p class="home-lede">Party games for one big screen and everyone's phones. Free, nothing to install.</p>
+        <p class="home-lede">Party games you play on your phones, with one big screen for everyone to watch. Free, and nothing to install.</p>
       </header>
 
       <form class="ticket ticket-vertical ticket-join" onSubmit={join} noValidate>
         <div class="ticket-main">
           <label class="ticket-eyebrow" for="join-code">
-            Got a room code?
+            Enter your room code here
           </label>
           <input
             id="join-code"

@@ -475,6 +475,32 @@
   border-radius: var(--r-s);
   background: var(--surface);
 }
+/* How-to-play page (RulesSheet): the story reads at full strength, the steps sit beneath it. */
+.k-rules {
+  display: grid;
+  gap: var(--s4);
+  align-content: start;
+}
+.k-rules-story {
+  padding-left: var(--s3);
+  border-left: 3px solid var(--accent);
+  color: var(--text);
+  font-size: calc(var(--t-s) * 1.15);
+  line-height: 1.5;
+}
+.k-rules-part {
+  display: grid;
+  gap: var(--s2);
+}
+.k-rules-steps {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding-left: 1.4em;
+}
+.k-rules-note {
+  font-size: var(--t-s);
+}
 /* A big full-width game button (the "tap" target on phones). */
 .g-hit {
   display: grid;

@@ -135,6 +135,7 @@ says which game this is. Draw it with CSS or SVG in the game's folder; keep it t
 | Cracked Cookbook (`cracked-cookbook`) | Yolk `#FFB020` | Basil `#6CCB5F` | `#2A1A2E` | The recipe card and tape: drawings sit on index cards with a torn masking-tape corner; props become die-cut stickers (white 4px outline, soft drop shadow). |
 | Wiki-what (`wiki-what`) | Hyperlink `#7AA2FF` | Mole earth `#C58B5A` | `#17183A` | The footnote: answers carry superscript markers `[1] [2] [3]`, sources are cited in `--font-mono` under a hairline, and the Mole is marked with a "citation needed" bracket. |
 | Cave Rave (`cave-rave`) | Ultraviolet `#B76CFF` | Glowstick `#3DFFB5` | `#0B0716` | Three glowing lanes under a stalactite zigzag edge. The only game allowed glow (`box-shadow` blooms) and a near-black stage. Sabotage effects (fog, mirror, wobble) are full-lane overlays in `--accent-2`. |
+| Second Witness (`second-witness`) | Plate gold `#D8A647` | Verdigris `#63D2BD` | `#261820` | The gold plate: the prompt is a chapter heading engraved on a riveted gold plate, answers are numbered like verses ("3:1", "3:2"), witness counts are small verdigris marks on the plate (an unmatched plate is left tarnished), and a temple silhouette sits faintly behind the prompt. The score multiplier is a gold coin in the header. |
 | Tap Duel (`tap-duel`, dev template) | Raffle (default) | Marquee (default) | Velvet | None: it is the plain reference. |
 
 If a game's final id differs from the table, rename the selector in `tokens.css`; don't add a
@@ -189,6 +190,11 @@ locally (the server stays the authority). `deadline` null hides it.
 a prompt, category or word sits on (display face, punched corner). `secret` adds a Hide/Show
 toggle against shoulder-surfing (`hidden` starts it hidden). `tone="accent"` fills it with the
 game accent. `size="l"` for screen prompts. `footer` is a mono footnote line (citations).
+
+**`<RulesSheet story how scoring? note? />`**: the body of every game's `Rules`. `story` is one
+scene-setting paragraph in the storyteller's voice; `how` is the steps of play, in order; `scoring`
+is one line per way to win points; `note` is the small print. The shell supplies the game's title
+and tagline above it, so the tagline is the one-line description and the story never repeats it.
 
 **`<Vote options value? onVote? disabled? changeable? layout? label? counts? />`**: pick one.
 `options: { id, label, hint?, color?, media?, disabled? }[]`. Pass `value` from the view so the

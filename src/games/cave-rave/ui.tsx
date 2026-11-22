@@ -1,7 +1,7 @@
 // Cave Rave UI. Phones run the song and judge locally (highway.tsx); the server only sees one
 // score per duel. The screen shows the bracket, a live score race and the sabotage feed.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Avatar, PlayerChip, Timer, playerOf, useEphemeral, useServerNow } from '../../client/kit';
+import { Avatar, PlayerChip, RulesSheet, Timer, playerOf, useEphemeral, useServerNow } from '../../client/kit';
 import type { ClientGameModule, PlayerProps, ScreenProps } from '../../client/gameModule';
 import type { Lobby } from '../../shared/types';
 import { audioState, click, ctxToPerf, loadOffset, medianOffset, perfToCtx, saveOffset, unlockAudio } from './audio';
@@ -81,7 +81,7 @@ function DuelCard({ duel, lobby, me, live, view, big }: { duel: DuelView; lobby:
     return (
       <div class="cr-duel is-bye">
         {side(duel.a)}
-        <span class="cr-bye">bye: straight through</span>
+        <span class="cr-bye">bye: moves on</span>
       </div>
     );
   return (
@@ -158,7 +158,7 @@ function Calibrate({ onDone, onCancel }: { onDone(ms: number): void; onCancel():
     <section class="g-stack cr-cal">
       <span class="eyebrow">Tune your timing</span>
       <h2 class="g-title">Tap along to {CLICKS} clicks</h2>
-      <p class="g-muted">Your phone plays sound a little late. Tap the pad in time with each click you hear and we'll correct for it. Turn the volume up.</p>
+      <p class="g-muted">Turn your volume up. Tap the pad each time you hear a click. This measures your phone's sound delay, so your taps count at the right time.</p>
       {stage === 'run' ? (
         <button
           type="button"
@@ -179,12 +179,12 @@ function Calibrate({ onDone, onCancel }: { onDone(ms: number): void; onCancel():
         </button>
       ) : (
         <>
-          {stage === 'fail' && <p class="cr-warn">We didn't catch enough taps. Make sure the sound is on, then try again.</p>}
+          {stage === 'fail' && <p class="cr-warn">Not enough taps. Turn the sound on and try again.</p>}
           <button type="button" class="btn btn-primary btn-block" onClick={start}>
-            {stage === 'fail' ? 'Try again' : 'Start the clicks'}
+            {stage === 'fail' ? 'Try again' : 'Start'}
           </button>
           <button type="button" class="btn btn-ghost btn-block" onClick={onCancel}>
-            Not now
+            Skip for now
           </button>
         </>
       )}
@@ -231,9 +231,9 @@ function Meddle({ view, send, lobby }: { view: CRView; send(a: CRAction): void; 
   return (
     <section class="g-stack cr-meddle">
       <div>
-        <span class="eyebrow">You're out. Time to meddle.</span>
+        <span class="eyebrow">You're out. Sabotage the players still in.</span>
         <p class="cr-meddle-state" role="status">
-          {!running ? (view.startAt && now < view.startAt ? 'The song is about to start…' : 'Song over. Wait for the next round.') : wait > 0 ? `Recharging: ${Math.ceil(wait / 1000)} s` : 'Ready: pick a trick, then a target'}
+          {!running ? (view.startAt && now < view.startAt ? 'The song starts soon.' : 'Song over. Wait for the next round.') : wait > 0 ? `Next sabotage in ${Math.ceil(wait / 1000)} s` : 'Pick a trick, then tap a player.'}
         </p>
         <span class="cr-charge" style={{ width: `${running ? 100 - (wait / SAB_COOLDOWN_MS) * 100 : 0}%` }} />
       </div>
@@ -246,7 +246,7 @@ function Meddle({ view, send, lobby }: { view: CRView; send(a: CRAction): void; 
         ))}
       </div>
       <div class="cr-targets">
-        {you.targets.length === 0 && <p class="g-muted">Nobody left to meddle with this round.</p>}
+        {you.targets.length === 0 && <p class="g-muted">No players left to sabotage this round.</p>}
         {you.targets.map((id) => {
           const p = playerOf(lobby, id);
           return (
@@ -280,7 +280,7 @@ function PlayRun({ view, send, lobby, offset }: { view: CRView; send(a: CRAction
     <section class="cr-play">
       <div class="cr-play-head">
         {practice ? (
-          <span class="eyebrow">Bye round: practice run, no score</span>
+          <span class="eyebrow">Bye round: practice only. This run doesn't count.</span>
         ) : (
           <span class="cr-opp">
             <span class="eyebrow">vs</span>
@@ -310,7 +310,7 @@ function Player({ view, send, lobby, me }: PlayerProps<CRView, CRAction>) {
     if (view.phase === 'play') setCalibrating(false);
   }, [view.phase]);
   const you = view.you;
-  if (!you) return <p class="g-muted">Watching this one.</p>;
+  if (!you) return <p class="g-muted">You joined after this game started. Watch the screen.</p>;
 
   if (calibrating && view.phase !== 'play')
     return (
@@ -332,7 +332,7 @@ function Player({ view, send, lobby, me }: PlayerProps<CRView, CRAction>) {
     return (
       <section class="g-stack">
         <RoundLabel view={view} />
-        <p class="g-title">Score in. Waiting for the others…</p>
+        <p class="g-title">Score sent. Waiting for the other players.</p>
         <Timer deadline={view.deadline} />
         <Duels view={view} lobby={lobby} me={me} />
       </section>
@@ -354,10 +354,10 @@ function Player({ view, send, lobby, me }: PlayerProps<CRView, CRAction>) {
             <PlayerChip lobby={lobby} id={you.opponent} size="44px" />
           </div>
         ) : (
-          <p class="g-title">{you.role === 'bye' ? 'Bye round: you go straight through.' : "You're out, but not done."}</p>
+          <p class="g-title">{you.role === 'bye' ? 'Bye round. You move on to the next round.' : "You're out. You can still sabotage."}</p>
         )}
-        {you.role === 'out' && <p class="g-muted">When the song starts, hit the duelists with fog, mirror and wobble.</p>}
-        {you.role === 'bye' && <p class="g-muted">You can play along for practice. It doesn't count.</p>}
+        {you.role === 'out' && <p class="g-muted">When the song starts, use fog, mirror or wobble on the players still in.</p>}
+        {you.role === 'bye' && <p class="g-muted">Play along for practice. Your score doesn't count.</p>}
         <SoundAndTiming offset={offset} onCalibrate={() => setCalibrating(true)} />
         {!lobby.screenConnected && <Duels view={view} lobby={lobby} me={me} />}
         {isDuel && (
@@ -371,7 +371,7 @@ function Player({ view, send, lobby, me }: PlayerProps<CRView, CRAction>) {
                 send({ type: 'ready' });
               }}
             >
-              {you.ready ? 'Ready. Waiting for the others…' : "I'm ready"}
+              {you.ready ? 'Ready. Waiting for the other players.' : "I'm ready"}
             </button>
           </div>
         )}
@@ -393,10 +393,10 @@ function Player({ view, send, lobby, me }: PlayerProps<CRView, CRAction>) {
                 {fmt(mine[me]?.score ?? 0)} <span class="g-muted">vs</span> {fmt(mine[you.opponent ?? '']?.score ?? 0)}
               </p>
             )}
-            {!won && <p class="g-muted">Stick around: from now on you meddle.</p>}
+            {!won && <p class="g-muted">From now on, you can sabotage the other players.</p>}
           </>
         ) : myDuel ? (
-          <p class="g-title">Bye: you're through.</p>
+          <p class="g-title">Bye. You're through.</p>
         ) : (
           <p class="g-title">Round {view.round} results</p>
         )}
@@ -460,7 +460,7 @@ function Screen({ view, lobby }: ScreenProps<CRView>) {
   const chart = useChart(view);
   let call: string;
   if (view.phase === 'ready') call = view.round === view.rounds ? 'The final' : 'Get ready';
-  else if (view.phase === 'play') call = view.startAt && now < view.startAt ? String(Math.ceil((view.startAt - now) / 1000)) : view.chartOver ? 'Scores coming in' : 'Dance!';
+  else if (view.phase === 'play') call = view.startAt && now < view.startAt ? String(Math.ceil((view.startAt - now) / 1000)) : view.chartOver ? 'Scores coming in' : 'Go!';
   else if (view.phase === 'reveal') call = 'Results';
   else call = `${nameOf(lobby, view.champion)} rules the cave`;
 
@@ -490,9 +490,9 @@ function Screen({ view, lobby }: ScreenProps<CRView>) {
           <History view={view} lobby={lobby} big />
         </div>
         <aside class="cr-meddlers">
-          <span class="eyebrow">The meddlers</span>
+          <span class="eyebrow">Saboteurs</span>
           {view.out.length === 0 ? (
-            <p class="g-muted">Knocked-out players sabotage the duels from their phones.</p>
+            <p class="g-muted">Knocked-out players can sabotage the duels from their phones.</p>
           ) : (
             <div class="cr-out">
               {view.out.map((id) => (
@@ -509,13 +509,17 @@ function Screen({ view, lobby }: ScreenProps<CRView>) {
 
 function Rules() {
   return (
-    <div class="g-stack">
-      <p>Rhythm duels in a single-elimination bracket. Every duel in a round plays the same song at the same time, on everyone's phone.</p>
-      <p>Notes fall down three lanes. Tap the left, middle or right of your screen as each one hits the line: Perfect scores 100, Good scores 50. Highest score wins the duel; on a tie, better accuracy wins. Odd numbers mean one player gets a bye.</p>
-      <p>Knocked out? You're not done: fog, mirror or wobble anyone still dancing, once every {SAB_COOLDOWN_MS / 1000} seconds.</p>
-      <p>Before your first duel, tune your timing: tap along to 8 clicks so your phone's sound delay doesn't cost you.</p>
-      <p class="g-muted">Points: 2 for every round you get through (wins and byes), plus 3 for the champion.</p>
-    </div>
+    <RulesSheet
+      story="Deep under the hills, the cave is shaking with music, and only one dancer gets to leave as its champion. Duels are won note by note. Anyone who gets knocked out stays behind to make life hard for the dancers still standing."
+      how={[
+        "Before your first duel, tune your timing. Tap along to 8 clicks, so your phone's sound delay doesn't cost you points.",
+        "Each round is a set of duels. Every duel plays the same song at the same time, on everyone's phone.",
+        'Notes fall down three lanes. Tap the left, middle or right of your screen as each note reaches the line. Perfect is 100 points. Good is 50.',
+        'The higher score wins the duel. On a tie, the better accuracy wins. If the numbers are odd, one player gets a bye and goes straight through.',
+        <>Knocked out? You are not done. Once every {SAB_COOLDOWN_MS / 1000} seconds, hit someone still dancing with fog, mirror or wobble.</>,
+      ]}
+      scoring={['Every round you get through (a win or a bye): +2', 'The champion: +3 more']}
+    />
   );
 }
 

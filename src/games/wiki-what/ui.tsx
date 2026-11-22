@@ -1,6 +1,6 @@
 // Wiki-what UI. Motif: the footnote. Choices carry superscript markers, sources are cited in mono
 // under a hairline, and the Mole is marked with a "citation needed" bracket.
-import { Avatar, PlayerChip, PromptCard, RevealStage, Timer, Vote, playerOf } from '../../client/kit';
+import { Avatar, PlayerChip, PromptCard, RevealStage, RulesSheet, Timer, Vote, playerOf } from '../../client/kit';
 import type { ClientGameModule, PlayerProps, ScreenProps } from '../../client/gameModule';
 import type { Lobby } from '../../shared/types';
 // Type-only imports from logic.ts: a value import would pull zod and the game logic into this chunk.
@@ -145,8 +145,8 @@ function MoleReveal({ view, lobby, me, big }: { view: WikiView; lobby: Lobby; me
       </div>
       <p class={`ww-verdict ${e.caught ? 'is-right' : 'is-wrong'}`}>
         {e.caught
-          ? `Caught. The team earns 3 bonus points${accusers.length ? ` and ${accusers.length} sharp-eyed player${accusers.length > 1 ? 's' : ''} earn 1 each` : ''}.`
-          : 'Not caught. The Mole earns 3 points for staying hidden.'}
+          ? `Mole caught. The team earns 3 points${accusers.length ? `, and the ${accusers.length} player${accusers.length > 1 ? 's' : ''} who accused them earn 1 each` : ''}.`
+          : 'Mole not caught. The Mole earns 3 points.'}
       </p>
       <Standings view={view} lobby={lobby} me={me} size={big ? '5vh' : undefined} />
     </div>
@@ -170,16 +170,16 @@ function Player({ view, send, lobby, me }: PlayerProps<WikiView, WikiAction>) {
             <PromptCard key={`${view.round}-${view.qi}`} secret hidden eyebrow="Your role this round" class="ww-role">
               {mole && you.answerIndex !== undefined ? (
                 <>
-                  You are the Mole. The answer is {MARKS[you.answerIndex]} {q.choices[you.answerIndex]}. Steer the team wrong without getting caught.
+                  You are the Mole. The right answer is {MARKS[you.answerIndex]} {q.choices[you.answerIndex]}. Get the team to pick a different one, without getting caught.
                 </>
               ) : (
-                'You are on the team. Find the answer, and watch for whoever steers you wrong.'
+                'You are on the team. Pick the right answer. One player is the Mole, and wants you to get it wrong.'
               )}
             </PromptCard>
           )}
           <div class="g-panel ww-q">
             <p class="ww-q-text">{q.text}</p>
-            <p class="ww-cite">Source shown after the answer</p>
+            <p class="ww-cite">The source shows after everyone answers</p>
           </div>
           <div class="ww-choices">
             {q.choices.map((c, i) => (
@@ -194,8 +194,8 @@ function Player({ view, send, lobby, me }: PlayerProps<WikiView, WikiAction>) {
           </div>
           <p class="g-muted">
             {you?.pick != null
-              ? `Locked in. ${Math.max(0, view.players.length - view.gone.length - view.voted.length)} still thinking.`
-              : 'Pick one. The team answer is the most popular pick.'}
+              ? `Answer locked in. Waiting for ${Math.max(0, view.players.length - view.gone.length - view.voted.length)} more.`
+              : 'Pick an answer. The most popular pick becomes the team answer.'}
           </p>
           {!room && <Pills ids={view.players} lobby={lobby} voted={view.voted} size="28px" />}
         </>
@@ -214,7 +214,7 @@ function Player({ view, send, lobby, me }: PlayerProps<WikiView, WikiAction>) {
       {view.phase === 'accuse' && (
         <>
           <h2 class="g-title">Who was the Mole?</h2>
-          <p class="g-muted">One of you saw the answers and may have steered the team wrong. Most accusations wins.</p>
+          <p class="g-muted">One player was the Mole. Accuse who you think it was. The player with the most accusations is caught.</p>
           <Vote
             label="Who was the Mole?"
             value={you?.accused ?? null}
@@ -246,7 +246,7 @@ function Screen({ view, lobby }: ScreenProps<WikiView>) {
         <div class="ww-stage">
           <div class="ww-q ww-q-l">
             <p class="ww-q-text">{q.text}</p>
-            <p class="ww-cite">Source shown after the answer</p>
+            <p class="ww-cite">The source shows after everyone answers</p>
           </div>
           <div class="ww-choices ww-choices-l">
             {q.choices.map((c, i) => (
@@ -268,7 +268,7 @@ function Screen({ view, lobby }: ScreenProps<WikiView>) {
       {view.phase === 'accuse' && (
         <div class="g-center">
           <h2 class="g-call">Who was the Mole?</h2>
-          <p class="g-muted">Accuse on your phones. Most accusations wins.</p>
+          <p class="g-muted">Accuse a player on your phone. The player with the most accusations is caught.</p>
           <Pills ids={view.players} lobby={lobby} voted={view.voted} size="9vh" />
         </div>
       )}
@@ -284,19 +284,22 @@ function Screen({ view, lobby }: ScreenProps<WikiView>) {
 
 function Rules() {
   return (
-    <div class="g-stack">
-      <p>
-        Everyone answers strange-but-true questions from Wikipedia. The team answer is the most popular pick. A tie goes to the choice locked in first.
-      </p>
-      <p>
-        Each round one player is secretly the Mole and sees the answers. The Mole wants the team to get it wrong. After each round, everyone accuses a
-        player. The Mole accuses too, to blend in, but that accusation does not count.
-      </p>
-      <p>
-        Right team answer: 2 team points, plus 1 for each player who picked it. Wrong team answer: the Mole gets 3. Catch the Mole (strictly the most accusations)
-        for 3 team points and 1 for each correct accuser. Stay hidden and the Mole gets 3. Your final score is your own points plus the team total.
-      </p>
-    </div>
+    <RulesSheet
+      story="In the strangest corners of Wikipedia, there is a quiz your team has to pass. You are all working together, except for one of you. The Mole already knows the answers, and wants you to get them wrong."
+      how={[
+        'Each round, the team answers strange-but-true questions from Wikipedia. Everyone picks an answer.',
+        'The team answer is the most popular pick. If it is tied, the choice locked in first wins.',
+        'One player each round is secretly the Mole. The Mole sees the right answer, and wants the team to get it wrong.',
+        'At the end of the round, everyone accuses a player. The Mole accuses someone too, to blend in, but that accusation does not count. The player with the most accusations is caught. If it is tied, nobody is.',
+      ]}
+      scoring={[
+        'The team answers right: 2 team points, plus 1 for each player who picked it',
+        'The team answers wrong: the Mole gets 3',
+        'The Mole is caught: 3 team points, plus 1 for each player who accused them',
+        'The Mole stays hidden: the Mole gets 3',
+      ]}
+      note="Your final score is your own points plus the team total."
+    />
   );
 }
 

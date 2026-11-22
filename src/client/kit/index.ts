@@ -8,6 +8,7 @@ export { Vote, type VoteOption, type VoteProps } from './Vote';
 export { PromptCard, type PromptCardProps } from './PromptCard';
 export { RevealStage, type RevealStageProps } from './RevealStage';
 export { QR, type QRProps } from './QR';
+export { RulesSheet, type RulesSheetProps } from './RulesSheet';
 export { PlayerChip, playerOf, type PlayerChipProps } from './PlayerChip';
 export { useServerClock, useServerNow, useAssets, useAsset, useEphemeral } from './hooks';
 export type { ServerClock } from '../net/clock';

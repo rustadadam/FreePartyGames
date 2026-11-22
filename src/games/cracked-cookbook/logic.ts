@@ -287,7 +287,7 @@ export default defineGame<CookState, CookAction, Record<string, never>>({
   manifest: {
     id: 'cracked-cookbook',
     title: 'Cracked Cookbook',
-    tagline: 'Draw the pantry, then cook with everyone else’s scribbles.',
+    tagline: 'Draw the ingredients, then cook with everyone else’s drawings.',
     minPlayers: 3,
     maxPlayers: 20,
     screen: 'optional',

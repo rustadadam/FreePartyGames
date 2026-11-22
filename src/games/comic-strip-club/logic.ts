@@ -261,7 +261,7 @@ export default defineGame<CscState, CscAction, Record<string, never>>({
   manifest: {
     id: 'comic-strip-club',
     title: 'Comic Strip Club',
-    tagline: 'Write a premise. Draw one panel. Pass it on. Laugh at the strip.',
+    tagline: 'Write an idea, draw a panel, pass it on, and see what the strip becomes.',
     minPlayers: 3,
     maxPlayers: 20,
     screen: 'optional',

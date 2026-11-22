@@ -98,6 +98,12 @@
   --accent-2: #c58b5a;
   --stage: #17183a;
 }
+[data-game='second-witness'] {
+  --accent: #d8a647;
+  --accent-ink: #2b1b05;
+  --accent-2: #63d2bd;
+  --stage: #261820;
+}
 [data-game='cave-rave'] {
   --accent: #b76cff;
   --accent-ink: #12051f;

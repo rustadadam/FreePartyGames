@@ -6,6 +6,7 @@ import comicStripClub from './comic-strip-club/logic';
 import wikiWhat from './wiki-what/logic';
 import crackedCookbook from './cracked-cookbook/logic';
 import caveRave from './cave-rave/logic';
+import secondWitness from './second-witness/logic';
 
 export const serverGames: GameRegistry = {
   [tapDuel.manifest.id]: tapDuel,
@@ -14,4 +15,5 @@ export const serverGames: GameRegistry = {
   [wikiWhat.manifest.id]: wikiWhat,
   [crackedCookbook.manifest.id]: crackedCookbook,
   [caveRave.manifest.id]: caveRave,
+  [secondWitness.manifest.id]: secondWitness,
 };

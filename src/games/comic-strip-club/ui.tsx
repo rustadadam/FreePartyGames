@@ -5,6 +5,7 @@ import {
   DrawingCanvas,
   PlayerChip,
   RevealStage,
+  RulesSheet,
   StrokeView,
   Timer,
   Vote,
@@ -17,7 +18,7 @@ import {
 import type { ClientGameModule, PlayerProps, ScreenProps, AssetMap } from '../../client/gameModule';
 import type { Lobby } from '../../shared/types';
 import type { CscAction, CscView, Panel, Remix, StripView } from './logic';
-import { MAX_PROMPT_CHARS, PANEL_ASPECT } from './constants';
+import { MAX_PROMPT_CHARS, PANEL_ASPECT, PANELS } from './constants';
 import { PREMISES } from './content';
 import './ui.css';
 
@@ -48,7 +49,7 @@ function Caption({ children, auto }: { children: string; auto?: boolean }) {
   return (
     <p class="cs-caption">
       {children}
-      {auto && <span class="cs-auto"> (auto-picked)</span>}
+      {auto && <span class="cs-auto"> (random premise)</span>}
     </p>
   );
 }
@@ -128,7 +129,7 @@ function RevealPhone({ view, assets, lobby }: { view: CscView; assets: AssetMap;
   const strips = view.strips!;
   const r = view.reveal!;
   const { idx, start } = useStripClock(r.startAt, r.stripMs, strips.length);
-  if (idx < 0) return <p class="g-call cs-call">Strips coming up…</p>;
+  if (idx < 0) return <p class="g-call cs-call">Strips start soon…</p>;
   const strip = strips[idx];
   return (
     <section class="g-stack">
@@ -155,7 +156,7 @@ function RevealScreen({ view, assets, lobby }: { view: CscView; assets: AssetMap
   const strips = view.strips!;
   const r = view.reveal!;
   const { idx, start } = useStripClock(r.startAt, r.stripMs, strips.length);
-  if (idx < 0) return <div class="g-center"><p class="g-call cs-call">Roll the strips…</p></div>;
+  if (idx < 0) return <div class="g-center"><p class="g-call cs-call">Strips start soon…</p></div>;
   const strip = strips[idx];
   return (
     <section class="cs-stage">
@@ -188,7 +189,7 @@ function RemixView({ view, assets, lobby, screen }: { view: CscView; assets: Ass
   const remix = view.remix ?? [];
   const { idx, start } = useStripClock(view.remixAt ?? 0, view.remixStripMs, remix.length || 1);
   if (!remix.length) return null;
-  if (idx < 0) return <div class="g-center"><p class="g-call cs-call">Bonus: the remix!</p></div>;
+  if (idx < 0) return <div class="g-center"><p class="g-call cs-call">Bonus round: remixed strips</p></div>;
   const strip = remix[idx];
   const step = view.stepMs;
   return (
@@ -251,7 +252,7 @@ function PromptStep({ view, send }: { view: CscView; send(a: CscAction): void })
           <span class="eyebrow">Step 1 · Write a premise</span>
           <Timer deadline={view.deadline} total={60_000} />
         </div>
-        <Caption>Start a comic. Someone else will draw it.</Caption>
+        <Caption>Write the idea for a comic. Another player will draw the first panel.</Caption>
         <textarea
           class="input cs-text"
           rows={4}
@@ -266,13 +267,13 @@ function PromptStep({ view, send }: { view: CscView; send(a: CscAction): void })
             {text.length}/{MAX_PROMPT_CHARS}
           </span>
           <button type="button" class="btn btn-s" disabled={sent} onClick={() => setText(PREMISES[Math.floor(Math.random() * PREMISES.length)])}>
-            Surprise me
+            Random premise
           </button>
         </div>
       </section>
       <div class="cs-dock">
         {sent ? (
-          <p class="cs-wait">Premise sent. Waiting for the others…</p>
+          <p class="cs-wait">Premise sent. Waiting for the other players.</p>
         ) : (
           <button type="button" class="btn btn-primary btn-block" disabled={!clean} onClick={() => send({ type: 'prompt', text: clean })}>
             Send premise
@@ -305,12 +306,12 @@ function DrawStep({ view, send, assets, lobby }: { view: CscView; send(a: CscAct
         </div>
         {src?.kind === 'prompt' ? (
           <div class="cs-source">
-            <p class="eyebrow">Draw the start of this</p>
+            <p class="eyebrow">Draw panel 1 for this premise</p>
             <Caption>{src.text}</Caption>
           </div>
         ) : (
           <div class="cs-source">
-            <p class="eyebrow">Last panel: continue the story</p>
+            <p class="eyebrow">Previous panel. Draw what happens next.</p>
             <PanelBox asset={src?.kind === 'panel' ? src.asset : null} assets={assets} />
           </div>
         )}
@@ -321,12 +322,12 @@ function DrawStep({ view, send, assets, lobby }: { view: CscView; send(a: CscAct
       <div class="cs-dock">
         {sent ? (
           <>
-            <p class="cs-wait">Panel sent. Waiting for the others…</p>
+            <p class="cs-wait">Panel sent. Waiting for the other players.</p>
             <Progress view={view} lobby={lobby} />
           </>
         ) : (
           <button type="button" class="btn btn-primary btn-block" onClick={submit}>
-            {strokes.length ? 'Done, pass it on' : 'Skip (blank panel)'}
+            {strokes.length ? 'Submit panel' : 'Skip (leave panel blank)'}
           </button>
         )}
       </div>
@@ -339,7 +340,7 @@ function VoteStep({ view, send, assets, lobby, me }: { view: CscView; send(a: Cs
     id: s.id,
     label: s.prompt,
     disabled: s.id === me,
-    hint: s.id === me ? 'Your premise: you can’t vote for it' : undefined,
+    hint: s.id === me ? 'Your premise. You can’t vote for it.' : undefined,
     media: (
       <div class="cs-mini">
         {s.panels.map((p, i) => (
@@ -351,7 +352,7 @@ function VoteStep({ view, send, assets, lobby, me }: { view: CscView; send(a: Cs
   return (
     <section class="g-stack cs-body">
       <div class="g-spread">
-        <span class="eyebrow">Vote your favourite strip</span>
+        <span class="eyebrow">Vote for your favourite strip</span>
         <Timer deadline={view.deadline} total={40_000} />
       </div>
       <Vote options={options} value={view.you?.vote} onVote={(id) => send({ type: 'vote', strip: id })} label="Favourite strip" />
@@ -376,7 +377,7 @@ function Player({ view, send, me, assets: _a, lobby }: PlayerProps<CscView, CscA
       case 'reveal':
         return (
           <section class="cs-body">
-            {screenOn ? <p class="g-call cs-call">Eyes on the screen!</p> : <RevealPhone view={view} assets={assets} lobby={lobby} />}
+            {screenOn ? <p class="g-call cs-call">Look at the screen.</p> : <RevealPhone view={view} assets={assets} lobby={lobby} />}
           </section>
         );
       case 'vote':
@@ -391,7 +392,7 @@ function Player({ view, send, me, assets: _a, lobby }: PlayerProps<CscView, CscA
       default:
         return (
           <section class="cs-body">
-            {screenOn ? <p class="g-call cs-call">Bonus remix on the screen</p> : <RemixView view={view} assets={assets} lobby={lobby} screen={false} />}
+            {screenOn ? <p class="g-call cs-call">Remixed strips are on the screen.</p> : <RemixView view={view} assets={assets} lobby={lobby} screen={false} />}
           </section>
         );
     }
@@ -447,12 +448,16 @@ function Screen({ view, assets: _a, lobby }: ScreenProps<CscView>) {
 
 function Rules() {
   return (
-    <ol>
-      <li>Everyone writes a comic premise.</li>
-      <li>You get someone else&rsquo;s premise and draw panel 1. Then you only see the previous panel, and draw the next one.</li>
-      <li>Watch every strip play out, then vote for your favourite. You can&rsquo;t vote for your own premise.</li>
-      <li>Everyone who made a strip scores for each vote. Bonus: remixed strips from random panels.</li>
-    </ol>
+    <RulesSheet
+      story="The Comic Strip Club is open late, and every strip on tonight's bill starts with one idea from one of you. Nobody gets to finish their own. Pass it on, and see what it turns into."
+      how={[
+        'Everyone writes the idea for a comic. This is the premise.',
+        `You get someone else's premise and draw the first panel. After that you only see the panel before yours, and draw the next one. Every strip has ${PANELS} panels.`,
+        'Watch every strip play out, then vote for your favourite. You cannot vote for your own premise.',
+        'After the votes, the club shuffles panels from different strips into remixed strips, just for fun.',
+      ]}
+      scoring={['Everyone who worked on a strip scores for each vote it gets']}
+    />
   );
 }
 

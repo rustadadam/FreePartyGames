@@ -25,6 +25,7 @@ Phones keep their seat if they lock or drop off: reopen the link and you're back
 - **Cracked Cookbook**: draw ingredients, then cook up a dish for a strange guest out of everyone's drawings.
 - **Wiki-what**: team trivia about strange real Wikipedia topics, with a secret Mole steering you wrong.
 - **Cave Rave**: three-lane rhythm duels in a knockout bracket. Knocked-out players get to sabotage the survivors.
+- **Second Witness**: everyone answers a category with one or two answers, hoping someone else wrote the same thing. Play it safe with one, or gamble on two.
 
 ## Run it yourself
 

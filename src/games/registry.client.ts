@@ -10,4 +10,5 @@ export const clientGames: Record<string, () => Promise<ClientGameModule>> = {
   'wiki-what': () => import('./wiki-what/ui').then((m) => m.default),
   'cracked-cookbook': () => import('./cracked-cookbook/ui').then((m) => m.default),
   'cave-rave': () => import('./cave-rave/ui').then((m) => m.default),
+  'second-witness': () => import('./second-witness/ui').then((m) => m.default),
 };

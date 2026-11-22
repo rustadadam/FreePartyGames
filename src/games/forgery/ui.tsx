@@ -3,7 +3,7 @@
 // With no screen the phone shows all of that itself. Everything comes from the kit.
 import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
-import { Avatar, DrawingCanvas, PlayerChip, PromptCard, RevealStage, StrokeView, Timer, Vote, playerOf, useAssets, useEphemeral } from '../../client/kit';
+import { Avatar, DrawingCanvas, PlayerChip, PromptCard, RevealStage, RulesSheet, StrokeView, Timer, Vote, playerOf, useAssets, useEphemeral } from '../../client/kit';
 import type { Drawing, Stroke } from '../../client/kit';
 import type { ClientGameModule, PlayerProps, ScreenProps } from '../../client/gameModule';
 import type { Lobby } from '../../shared/types';
@@ -73,7 +73,7 @@ function MyStroke({ view, lobby, me, send }: { view: V; lobby: Lobby; me: string
         widths={[STROKE_W]}
         underlay={done}
         paper="var(--stage)"
-        label="Draw one stroke"
+        label="Draw one line"
         onStrokeProgress={(pts) => {
           for (let i = 0; i < pts.length; i += 200) send({ type: 'ink', pts: pts.slice(i, i + 200) });
         }}
@@ -130,7 +130,7 @@ function TurnOrder({ view, lobby, size = '36px', named }: { view: V; lobby: Lobb
 
 function drawerLine(view: V, lobby: Lobby, me?: string): string {
   if (!view.drawer) return '';
-  if (view.drawer === me) return 'Your turn. One stroke.';
+  if (view.drawer === me) return 'Your turn. Draw one line.';
   const next = view.turns[view.turn + 1];
   return `${nameOf(lobby, view.drawer)} is drawing${next && next === me ? '. You are up next.' : ''}`;
 }
@@ -191,7 +191,7 @@ function verdict(view: V, lobby: Lobby): string {
   if (!r) return '';
   const accused = view.result?.accused;
   if (r.outcome === 'void') return 'The forger left. Round skipped.';
-  if (r.outcome === 'stolen') return 'Caught, but they guessed the word!';
+  if (r.outcome === 'stolen') return 'Caught, but they guessed the word and kept the fortune!';
   if (r.outcome === 'caught') return r.guess ? 'Caught, and the guess was wrong.' : 'Caught, and out of time to guess.';
   return accused ? `${nameOf(lobby, accused)} took the blame. The forger walks free!` : 'The vote tied. The forger walks free!';
 }
@@ -250,12 +250,12 @@ function SecretCard({ view }: { view: V }) {
       {you.role === 'forger' ? (
         <>
           You are the forger
-          <span class="fg-card-note">Blend in. Nobody may find out you cannot see the word.</span>
+          <span class="fg-card-note">You were never invited. Study the lines and draw like you belong.</span>
         </>
       ) : (
         <>
           {you.word}
-          <span class="fg-card-note">Hint at it. Do not give it away.</span>
+          <span class="fg-card-note">Show you know it, without making it obvious to the forger.</span>
         </>
       )}
     </PromptCard>
@@ -299,7 +299,7 @@ function Player({ view, send, me, lobby }: PlayerProps<V, ForgeryAction>) {
       <>
         {isForger ? (
           <>
-            <p class="fg-status is-me">You were caught. Name the word to steal the win.</p>
+            <p class="fg-status is-me">They found you. Guess the word to steal the win.</p>
             <Vote
               label="Guess the word"
               value={null}
@@ -309,7 +309,7 @@ function Player({ view, send, me, lobby }: PlayerProps<V, ForgeryAction>) {
           </>
         ) : (
           <>
-            <p class="fg-status">{nameOf(lobby, view.result?.accused)} was the forger, and gets one guess at the word.</p>
+            <p class="fg-status">{nameOf(lobby, view.result?.accused)} is the forger. If they guess the word, they steal the win.</p>
             <VoteTally view={view} lobby={lobby} />
           </>
         )}
@@ -342,7 +342,7 @@ function Screen({ view, lobby }: ScreenProps<V>) {
     rail = (
       <>
         <p class="fg-call">{view.drawer ? nameOf(lobby, view.drawer) : ''}</p>
-        <p class="g-muted">is drawing one stroke</p>
+        <p class="g-muted">is drawing one line</p>
         <TurnOrder view={view} lobby={lobby} size="5vh" named />
       </>
     );
@@ -386,19 +386,22 @@ function Screen({ view, lobby }: ScreenProps<V>) {
 
 function Rules() {
   return (
-    <div class="g-stack">
-      <p>
-        Everyone but one player gets a category and a secret word. The forger sees only the category, and has to bluff. Take turns adding one single
-        stroke to the shared canvas, twice around. Then vote on who the forger is.
-      </p>
-      <ul class="g-list">
-        <li>Forger gets away (or the vote ties): forger +{POINTS.escaped}</li>
-        <li>Forger caught, but guesses the word: forger +{POINTS.stolen}</li>
-        <li>Forger caught and guesses wrong: every artist +{POINTS.caught}</li>
-        <li>Each artist who voted for the forger: +{POINTS.sharpEye}</li>
-      </ul>
-      <p class="g-muted">The forger rotates each round. A round ends if the forger leaves, and a drawer who leaves is skipped.</p>
-    </div>
+    <RulesSheet
+      story="You and a few distinguished guests have been invited to the world's greatest art challenge. Together, you will paint the next masterpiece, one that will stun the world and make every one of you rich. But one artist was never invited. They slipped in to take your fortune. Find them, or lose it all."
+      how={[
+        'Everyone gets a category, like Kitchen tools. Everyone except the forger also gets a secret word from that category. The forger sees only the category.',
+        'Take turns drawing one line on the shared canvas, to show you know the word. Go around the table twice.',
+        'Vote on who you think the forger is. The player with the most votes is accused. If votes are tied, nobody is.',
+        'If the forger is accused, they get one last chance: pick the word from a list. A right guess steals the win.',
+      ]}
+      scoring={[
+        <>The forger gets away (or the vote is tied): forger +{POINTS.escaped}</>,
+        <>The forger is caught but guesses the word: forger +{POINTS.stolen}</>,
+        <>The forger is caught and guesses wrong: every artist +{POINTS.caught}</>,
+        <>Each artist who voted for the forger: +{POINTS.sharpEye}</>,
+      ]}
+      note="Every round has a new forger. If the forger leaves, the round is skipped. If a drawer leaves, their turn is skipped."
+    />
   );
 }
 

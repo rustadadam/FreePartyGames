@@ -9,6 +9,7 @@ import {
   PlayerChip,
   PromptCard,
   RevealStage,
+  RulesSheet,
   StrokeView,
   Timer,
   Vote,
@@ -75,7 +76,7 @@ function DishPlate({ dish, pantry, assets }: { dish: DishView; pantry: Pantry; a
 
 /** The pantry: every prop so far as a taped index card. */
 function PantryWall({ pantry, assets, lobby, class: cls }: { pantry: Pantry; assets: AssetMap; lobby: Lobby; class?: string }) {
-  if (!pantry.length) return <p class="g-muted cc-empty">The shelves are bare. Props will land here.</p>;
+  if (!pantry.length) return <p class="g-muted cc-empty">No drawings yet. Everyone's props will show up here.</p>;
   return (
     <ul class={`cc-wall${cls ? ` ${cls}` : ''}`} aria-label="Pantry">
       {[...pantry].reverse().map((p) => (
@@ -94,7 +95,7 @@ function Waiting({ ids, lobby, size }: { ids: string[]; lobby: Lobby; size?: str
   const shown = ids.slice(0, 10);
   return (
     <div class="cc-waiting" aria-live="polite">
-      <span class="eyebrow">Still cooking</span>
+      <span class="eyebrow">Waiting for</span>
       {shown.map((id) => (
         <PlayerChip key={id} lobby={lobby} id={id} size={size} />
       ))}
@@ -109,9 +110,9 @@ function phaseTotal(phase: CookView['phase']): number {
 
 function phaseLabel(v: CookView): string {
   if (v.phase === 'draw') return `Pantry ${v.round} of ${v.rounds}`;
-  if (v.phase === 'cook') return 'Cook the dish';
-  if (v.phase === 'vote') return 'Taste test';
-  return 'Dinner is served';
+  if (v.phase === 'cook') return 'Cook your dish';
+  if (v.phase === 'vote') return 'Vote on a dish';
+  return 'Results';
 }
 
 function Bar({ view, size }: { view: CookView; size?: 'm' | 'l' }) {
@@ -152,17 +153,17 @@ function DrawProp({ view, send }: { view: CookView; send(a: CookAction): void })
   return (
     <section class="cc-phone">
       <Bar view={view} />
-      <PromptCard eyebrow={view.round === 1 ? 'Draw this ingredient' : 'Draw this for the scene'} tone="accent">
+      <PromptCard eyebrow={view.round === 1 ? 'Draw this ingredient' : 'Draw this scene element'} tone="accent">
         {prompt}
       </PromptCard>
       <DrawingCanvas strokes={strokes} onChange={setStrokes} colors={INK} aspect={1} label={`Drawing of ${prompt}`} />
       <label class="field">
-        <span class="eyebrow">Name it</span>
+        <span class="eyebrow">Name your drawing</span>
         <input class="input" value={name} maxLength={NAME_MAX} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
       </label>
       <div class="cc-dock">
         <button type="button" class="btn btn-primary btn-block" disabled={!strokes.length} onClick={submit}>
-          Add to the pantry
+          Submit drawing
         </button>
       </div>
     </section>
@@ -304,7 +305,7 @@ function Compose({ view, send, assets }: { view: CookView; send(a: CookAction): 
             <input type="range" min={-180} max={180} value={picked.r} onInput={(e) => patch(picked.uid, { r: Number((e.target as HTMLInputElement).value) })} />
           </label>
           <button type="button" class="btn btn-s" onClick={front}>
-            To front
+            Bring to front
           </button>
           <button type="button" class="btn btn-s btn-danger" onClick={remove}>
             Remove
@@ -312,7 +313,7 @@ function Compose({ view, send, assets }: { view: CookView; send(a: CookAction): 
         </div>
       )}
       {mode === 'place' && !picked && (
-        <p class="g-muted cc-hint">{placed.length ? 'Tap a sticker to select it, drag to move it.' : 'Tap a prop below to put it on your plate.'}</p>
+        <p class="g-muted cc-hint">{placed.length ? 'Tap a prop to select it. Drag to move it.' : 'Tap a prop below to add it to your plate.'}</p>
       )}
 
       <div>
@@ -326,21 +327,21 @@ function Compose({ view, send, assets }: { view: CookView; send(a: CookAction): 
             ))}
           </div>
         ) : (
-          <p class="g-muted">The pantry is empty. Draw your dish by hand.</p>
+          <p class="g-muted">No props to use. Draw your dish by hand.</p>
         )}
       </div>
 
       <div class="cc-dock cc-dock-cook">
         <div class="cc-seg" role="radiogroup" aria-label="What your finger does">
           <button type="button" role="radio" aria-checked={mode === 'place'} class={mode === 'place' ? 'is-on' : ''} onClick={() => setMode('place')}>
-            Stickers {placed.length}/{MAX_STICKERS}
+            Props {placed.length}/{MAX_STICKERS}
           </button>
           <button type="button" role="radio" aria-checked={mode === 'draw'} class={mode === 'draw' ? 'is-on' : ''} onClick={() => setMode('draw')}>
             Draw
           </button>
         </div>
         <button type="button" class="btn btn-primary" onClick={submit}>
-          Serve it up
+          Submit dish
         </button>
       </div>
     </section>
@@ -370,7 +371,7 @@ function PhoneVote({ view, send, assets }: { view: CookView; send(a: CookAction)
   return (
     <section class="cc-phone">
       <Bar view={view} />
-      <p class="g-muted">Pick the dish you would eat first. You cannot pick your own. You can change your mind until time is up.</p>
+      <p class="g-muted">Vote for the best dish. You can't vote for your own. You can change your vote until time runs out.</p>
       <Vote
         label="Vote for the best dish"
         changeable
@@ -420,7 +421,7 @@ function Standings({ scores, lobby, me, size }: { scores: Record<string, number>
   const ids = Object.keys(scores).sort((a, b) => scores[b] - scores[a]);
   return (
     <div class="cc-board">
-      <p class="eyebrow">Kitchen scores</p>
+      <p class="eyebrow">Scores</p>
       <ol>
         {ids.map((id, i) => (
           <li key={id} class="cc-board-row" style={{ animationDelay: `${i * 60}ms` }}>
@@ -445,18 +446,18 @@ function RevealBoard({ view, assets, lobby, me, size }: { view: CookView; assets
 function Player({ view, send, lobby, me, assets: _shared }: PlayerProps<CookView, CookAction>) {
   const assets = useAssets(assetIds(view));
   const you = view.you;
-  if (!you) return <p class="g-muted">Watching this one.</p>;
+  if (!you) return <p class="g-muted">You joined after this game started. Watch the screen.</p>;
 
   if (view.phase === 'draw') {
     return you.submitted ? (
-      <PhoneWait view={view} lobby={lobby} assets={assets} title="In the pantry. Nice." note={`Pantry ${view.round} of ${view.rounds}`} />
+      <PhoneWait view={view} lobby={lobby} assets={assets} title="Drawing submitted. Waiting for the other players." note={`Pantry ${view.round} of ${view.rounds}`} />
     ) : (
       <DrawProp key={view.round} view={view} send={send} />
     );
   }
   if (view.phase === 'cook') {
     return you.submitted ? (
-      <PhoneWait view={view} lobby={lobby} assets={assets} title="Served. Wait for the other cooks." note="Order up" />
+      <PhoneWait view={view} lobby={lobby} assets={assets} title="Dish submitted. Waiting for the other players." note="Cooking round" />
     ) : (
       <Compose view={view} send={send} assets={assets} />
     );
@@ -468,7 +469,7 @@ function Player({ view, send, lobby, me, assets: _shared }: PlayerProps<CookView
     <section class="cc-phone">
       <Bar view={view} />
       {lobby.screenConnected ? (
-        <PromptCard eyebrow="Dinner is served">Eyes on the screen. Your score: {view.scores?.[me] ?? 0}</PromptCard>
+        <PromptCard eyebrow="Results">Look at the screen. Your score: {view.scores?.[me] ?? 0}</PromptCard>
       ) : (
         <RevealBoard view={view} assets={assets} lobby={lobby} me={me} size="32px" />
       )}
@@ -485,7 +486,7 @@ function Screen({ view, lobby, assets: _shared }: ScreenProps<CookView>) {
         <header class="cc-head">
           <div>
             <p class="cc-tape eyebrow">{phaseLabel(view)}</p>
-            <h1 class="g-title">{view.round === 1 ? 'Draw an ingredient. Name it.' : 'Now the scenery. Draw it.'}</h1>
+            <h1 class="g-title">{view.round === 1 ? 'Draw an ingredient on your phone, then name it.' : 'Draw a scene element on your phone, then name it.'}</h1>
           </div>
           <Timer deadline={view.deadline} total={DRAW_MS} size="l" />
         </header>
@@ -503,7 +504,7 @@ function Screen({ view, lobby, assets: _shared }: ScreenProps<CookView>) {
         <header class="cc-head">
           <div>
             <p class="cc-tape eyebrow">{phaseLabel(view)}</p>
-            <h1 class="g-title">Plate it with everyone else&rsquo;s drawings.</h1>
+            <h1 class="g-title">Build your dish on your phone, using drawings from other players.</h1>
           </div>
           <Timer deadline={view.deadline} total={COOK_MS} size="l" />
         </header>
@@ -519,7 +520,7 @@ function Screen({ view, lobby, assets: _shared }: ScreenProps<CookView>) {
             const done = !view.waiting.includes(id);
             return (
               <span key={id} class={`cc-cook${done ? ' is-done' : ''}`}>
-                <PlayerChip lobby={lobby} id={id} size="4vh" trailing={done ? 'Served' : null} />
+                <PlayerChip lobby={lobby} id={id} size="4vh" trailing={done ? 'Done' : null} />
               </span>
             );
           })}
@@ -571,20 +572,21 @@ function Screen({ view, lobby, assets: _shared }: ScreenProps<CookView>) {
 
 function Rules() {
   return (
-    <div class="g-stack">
-      <p>
-        <b>Two pantry rounds.</b> You get an ingredient, then a scene element. Draw it and name it. Everything goes in the shared pantry.
-      </p>
-      <p>
-        <b>Cook.</b> You get a meal order (Breakfast, Lunch or Dessert, with a twist) and a hand of props other players drew. Drag them onto your plate, resize and turn them, and add your own strokes. Up to {MAX_STICKERS} stickers.
-      </p>
-      <p>
-        <b>Vote.</b> Pick the best dish. Not your own.
-      </p>
-      <p>
-        <b>Points.</b> The cook earns {VOTE_PTS} per vote. Every prop artist earns {PROP_PTS} per vote on any dish that used their prop (once per dish, and never on their own dish).
-      </p>
-    </div>
+    <RulesSheet
+      story="The kitchen is empty, and the guests are already seated. So everyone stocks the pantry with their own drawings, then cooks dinner from whatever the others left behind. Make something worth ordering."
+      how={[
+        'Two pantry rounds. First you get an ingredient, then a scene element. Draw it and name it. Every drawing goes into the shared pantry.',
+        <>
+          Then you cook. You get a meal order (Breakfast, Lunch or Dessert, with a twist) and a hand of props that other players drew. Drag them onto
+          your plate, resize and turn them, and add your own lines. You can use up to {MAX_STICKERS} props.
+        </>,
+        'Everyone votes for the best dish. You cannot vote for your own.',
+      ]}
+      scoring={[
+        <>The cook earns {VOTE_PTS} points for each vote.</>,
+        <>Every artist whose prop is on a dish earns {PROP_PTS} points for each vote on that dish. This counts once per dish, and never on your own.</>,
+      ]}
+    />
   );
 }
 

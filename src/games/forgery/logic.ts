@@ -239,7 +239,7 @@ export default defineGame<ForgeryState, ForgeryAction, ForgerySettings>({
   manifest: {
     id: 'forgery',
     title: 'Forgery',
-    tagline: 'One of you has no idea what you are drawing.',
+    tagline: 'A social deception game, with art.',
     minPlayers: MIN_PLAYERS,
     maxPlayers: MAX_PLAYERS,
     screen: 'optional',

@@ -219,7 +219,7 @@ export default defineGame<WikiState, WikiAction, WikiSettings>({
   manifest: {
     id: 'wiki-what',
     title: 'Wiki-what',
-    tagline: 'Strange-but-true trivia. One of you is working against the team.',
+    tagline: 'Strange-but-true trivia, with a traitor on the team.',
     minPlayers: 3,
     maxPlayers: 20,
     screen: 'optional',

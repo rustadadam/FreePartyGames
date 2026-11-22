@@ -35,7 +35,7 @@ export function PromptCard({ eyebrow, children, secret, hidden, size = 'm', tone
         </div>
       )}
       <div class="k-prompt-body" aria-hidden={secret && !shown ? 'true' : undefined}>
-        {secret && !shown ? <span class="k-prompt-veil">Only you can see this. Tap Show.</span> : children}
+        {secret && !shown ? <span class="k-prompt-veil">Hidden. Tap Show to see it.</span> : children}
       </div>
       {footer && <div class="k-prompt-foot">{footer}</div>}
     </div>
