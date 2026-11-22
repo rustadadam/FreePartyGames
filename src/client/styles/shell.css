@@ -1,0 +1,931 @@
+/* App shell: ticket, home, lobby, phone + screen frames, results, connection chrome. */
+
+/* =========================================================
+   The ticket (signature)
+   ========================================================= */
+.ticket {
+  --tk: var(--raffle);
+  --tk-ink: var(--night);
+  --notch: 16px;
+  position: relative;
+  display: grid;
+  background: var(--tk);
+  color: var(--tk-ink);
+  border-radius: 14px;
+  transform: rotate(-2deg);
+  box-shadow: 0 22px 44px -18px rgb(0 0 0 / 0.7);
+}
+.ticket-vertical {
+  grid-template-rows: auto auto;
+}
+.ticket-horizontal {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.ticket-main {
+  position: relative;
+  display: grid;
+  justify-items: start;
+  gap: var(--s1);
+  padding: var(--s5) var(--s5) var(--s4);
+  min-width: 0;
+}
+/* inner printed frame */
+.ticket-main::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 2px solid rgb(26 16 51 / 0.22);
+  border-radius: 8px;
+  pointer-events: none;
+}
+.ticket-eyebrow {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: calc(var(--t-s) * 0.86);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.ticket-code {
+  font-family: var(--font-display);
+  font-size: var(--t-mega);
+  line-height: 0.95;
+  letter-spacing: 0.06em;
+}
+.ticket-url {
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.ticket-stub {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--s2);
+  padding: var(--s4) var(--s5) var(--s5);
+}
+.ticket-vertical .ticket-stub {
+  border-top: 3px dashed rgb(26 16 51 / 0.35);
+}
+.ticket-horizontal .ticket-stub {
+  border-left: 3px dashed rgb(26 16 51 / 0.35);
+  padding: var(--s4);
+}
+/* punched notches on the perforation line */
+.ticket-stub::before,
+.ticket-stub::after {
+  content: '';
+  position: absolute;
+  width: calc(var(--notch) * 2);
+  height: calc(var(--notch) * 2);
+  border-radius: 50%;
+  background: var(--bg);
+}
+.ticket-vertical .ticket-stub::before,
+.ticket-vertical .ticket-stub::after {
+  top: calc(var(--notch) * -1 - 1.5px);
+}
+.ticket-vertical .ticket-stub::before {
+  left: calc(var(--notch) * -1);
+}
+.ticket-vertical .ticket-stub::after {
+  right: calc(var(--notch) * -1);
+}
+.ticket-horizontal .ticket-stub::before,
+.ticket-horizontal .ticket-stub::after {
+  left: calc(var(--notch) * -1 - 1.5px);
+}
+.ticket-horizontal .ticket-stub::before {
+  top: calc(var(--notch) * -1);
+}
+.ticket-horizontal .ticket-stub::after {
+  bottom: calc(var(--notch) * -1);
+}
+.ticket-stub .k-qr {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+.ticket-fine {
+  font-family: var(--font-mono);
+  font-size: calc(var(--t-s) * 0.8);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+/* small stub: header / rail */
+.ticket-mini {
+  display: inline-block;
+  padding: 3px 14px 1px;
+  border-radius: 6px;
+  background: var(--raffle);
+  color: var(--night);
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  -webkit-mask:
+    radial-gradient(circle at 0 50%, transparent 5px, #000 5.5px) left / 51% 100% no-repeat,
+    radial-gradient(circle at 100% 50%, transparent 5px, #000 5.5px) right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle at 0 50%, transparent 5px, #000 5.5px) left / 51% 100% no-repeat,
+    radial-gradient(circle at 100% 50%, transparent 5px, #000 5.5px) right / 51% 100% no-repeat;
+}
+
+/* ticket-local controls */
+.btn-ink {
+  background: var(--night);
+  border-color: var(--night);
+  color: var(--chalk);
+}
+.ticket .input {
+  background: rgb(255 255 255 / 0.9);
+  border-color: transparent;
+  color: var(--night);
+}
+.ticket .input::placeholder {
+  color: rgb(26 16 51 / 0.45);
+}
+.ticket :focus-visible {
+  outline-color: var(--night);
+}
+
+/* =========================================================
+   Home
+   ========================================================= */
+.home {
+  display: grid;
+  gap: var(--s6);
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: calc(var(--safe-t) + var(--s6)) calc(var(--gutter) + var(--safe-r)) calc(var(--safe-b) + var(--s7))
+    calc(var(--gutter) + var(--safe-l));
+}
+.home-head {
+  display: grid;
+  gap: var(--s3);
+}
+.wordmark {
+  font-size: clamp(52px, 16vw, 104px);
+  line-height: 0.88;
+}
+.home-lede {
+  max-width: 30ch;
+  color: var(--muted);
+}
+.ticket-join {
+  margin: 0 6px;
+}
+.ticket-join .ticket-main {
+  justify-items: stretch;
+  padding-bottom: var(--s3);
+}
+.ticket-input {
+  width: 100%;
+  min-height: 1.1em;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--night);
+  font-size: clamp(72px, 24vw, 128px);
+  text-transform: uppercase;
+}
+.ticket-input::placeholder {
+  color: rgb(26 16 51 / 0.22);
+}
+.ticket-input:focus-visible {
+  outline: none;
+  text-decoration: underline 4px rgb(26 16 51 / 0.4);
+  text-underline-offset: 8px;
+}
+.ticket-stub-form {
+  justify-items: stretch;
+  align-content: start;
+  gap: var(--s3);
+}
+.form-error {
+  min-height: 1.4em;
+  font-weight: 700;
+  font-size: var(--t-s);
+}
+.host .form-error {
+  color: var(--danger);
+}
+.host {
+  display: grid;
+  gap: var(--s3);
+  align-content: start;
+}
+.host-option {
+  display: grid;
+  gap: var(--s1);
+  width: 100%;
+  padding: var(--s4) var(--s5);
+  border: 2px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  text-align: left;
+}
+button.host-option:active:not(:disabled) {
+  transform: scale(0.99);
+}
+.host-option.is-open {
+  border-color: var(--accent);
+}
+.host-option-toggle {
+  display: grid;
+  gap: var(--s1);
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.host-option-title {
+  font-weight: 700;
+  font-size: calc(var(--t-m) * 1.1);
+}
+.host-option-body {
+  color: var(--muted);
+  font-size: var(--t-s);
+}
+.host-option-form {
+  display: grid;
+  gap: var(--s3);
+  margin-top: var(--s3);
+}
+@media (min-width: 900px) {
+  .home {
+    grid-template-columns: 1.1fr 1fr;
+    grid-template-areas: 'head head' 'ticket host';
+    column-gap: var(--s7);
+    align-items: start;
+    padding-top: var(--s7);
+  }
+  .home-head {
+    grid-area: head;
+  }
+  .ticket-join {
+    grid-area: ticket;
+  }
+  .host {
+    grid-area: host;
+    padding-top: var(--s5);
+  }
+}
+
+/* =========================================================
+   Shared lobby pieces
+   ========================================================= */
+.count {
+  font-family: var(--font-mono);
+  font-size: 0.7em;
+  color: var(--muted);
+  vertical-align: middle;
+}
+.section-h {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: calc(var(--t-s) * 0.86);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hint,
+.waiting,
+.empty {
+  color: var(--muted);
+  font-size: var(--t-s);
+}
+.hint {
+  margin-top: var(--s2);
+}
+.waiting {
+  font-size: var(--t-m);
+}
+
+.wall-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3) var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.punch {
+  display: grid;
+  justify-items: center;
+  gap: var(--s1);
+  width: calc(var(--punch, 48px) + 22px);
+}
+.punch-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-s);
+  font-weight: 700;
+}
+.punch.is-me .punch-name {
+  color: var(--highlight);
+}
+.wall-btn {
+  padding: 2px;
+  border: 2px solid transparent;
+  border-radius: var(--r-s);
+  background: none;
+}
+.wall-btn.is-picked {
+  border-color: var(--danger);
+}
+.wall-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s3);
+  padding: var(--s3);
+  border-radius: var(--r-m);
+  background: var(--surface);
+}
+.wall-action > span {
+  flex: 1 1 100%;
+  font-weight: 700;
+}
+
+.picker {
+  display: grid;
+  gap: var(--s3);
+}
+.picker-card {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s4);
+  border: 2px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  text-align: left;
+  transition: border-color var(--d-fast);
+}
+.picker-card.is-on {
+  border-color: var(--accent);
+  box-shadow: inset 6px 0 0 var(--accent);
+}
+.picker-title {
+  font-family: var(--font-display);
+  font-size: calc(var(--t-m) * 1.25);
+  line-height: 1.05;
+}
+.picker-card.is-on .picker-title {
+  color: var(--accent);
+}
+.picker-tag {
+  font-size: var(--t-s);
+}
+.picker-rules {
+  display: grid;
+  gap: var(--s1);
+  margin-top: var(--s3);
+  padding: 0 var(--s2);
+  color: var(--muted);
+  font-size: var(--t-s);
+}
+.picker-meta {
+  font-family: var(--font-mono);
+  font-size: calc(var(--t-s) * 0.8);
+  color: var(--muted);
+}
+
+.selected {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s4) var(--s5);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  box-shadow: inset 6px 0 0 var(--accent);
+}
+.selected-title {
+  font-size: var(--t-l);
+  color: var(--accent);
+}
+.selected-tag {
+  font-weight: 700;
+}
+.selected-rules {
+  color: var(--muted);
+  font-size: var(--t-s);
+}
+.selected-meta {
+  font-family: var(--font-mono);
+  font-size: calc(var(--t-s) * 0.8);
+  color: var(--muted);
+}
+.bots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}
+.badge {
+  margin-left: var(--s2);
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--highlight);
+  color: var(--night);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* =========================================================
+   Phone frame
+   ========================================================= */
+.view-phone {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+.phone-head {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: calc(var(--safe-t) + var(--s2)) calc(var(--gutter) + var(--safe-r)) var(--s2) calc(var(--gutter) + var(--safe-l));
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  border-bottom: 1px solid var(--line);
+}
+.phone-head-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: calc(var(--t-s) * 0.86);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.phone-me {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 48px;
+  padding: 4px 10px 4px 4px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+.phone-me-caret {
+  min-width: 1.5em;
+  color: var(--muted);
+  font-weight: 700;
+}
+.sheet {
+  position: sticky;
+  top: calc(var(--safe-t) + 66px);
+  z-index: 9;
+  display: grid;
+  gap: var(--s2);
+  margin: 0 calc(var(--gutter) + var(--safe-r)) 0 calc(var(--gutter) + var(--safe-l));
+  padding: var(--s4);
+  border: 2px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  box-shadow: 0 20px 40px -10px rgb(0 0 0 / 0.6);
+}
+.sheet-who {
+  margin-bottom: var(--s2);
+}
+.phone-body {
+  flex: 1;
+  display: grid;
+  align-content: start;
+  gap: var(--s5);
+  padding: var(--s4) calc(var(--gutter) + var(--safe-r)) var(--s5) calc(var(--gutter) + var(--safe-l));
+}
+.phone-welcome {
+  display: grid;
+  gap: var(--s1);
+}
+.phone-hello {
+  font-size: var(--t-xl);
+  overflow-wrap: anywhere;
+}
+.phone-share {
+  display: grid;
+  gap: var(--s4);
+}
+.phone-ticket {
+  margin: 0 4px;
+  --t-mega: 52px;
+}
+.phone-ticket .ticket-main {
+  align-content: center;
+}
+.phone-ticket .ticket-stub {
+  width: 132px;
+}
+.phone-spectate {
+  display: grid;
+  gap: var(--s3);
+  padding-top: var(--s6);
+}
+.dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 8;
+  padding: var(--s5) calc(var(--gutter) + var(--safe-r)) calc(var(--safe-b) + var(--s3)) calc(var(--gutter) + var(--safe-l));
+  background: linear-gradient(to bottom, transparent, var(--bg) 35%);
+}
+.dock-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: var(--s3);
+}
+.dock-wait {
+  min-height: var(--tap);
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--line);
+  border-radius: var(--r-m);
+  color: var(--muted);
+  font-size: var(--t-s);
+  text-align: center;
+}
+.phase-lobby .wall {
+  --punch: 48px;
+}
+
+/* =========================================================
+   Screen frame (sizes in vh: readable at 3 m)
+   ========================================================= */
+.view-screen {
+  min-height: 100vh;
+  font-size: var(--t-m);
+}
+.screen-lobby {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 5vw;
+  height: 100vh;
+  padding: 6vh 4.5vw 5vh;
+  overflow: hidden;
+}
+.screen-lobby-ticket {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 5vh;
+}
+.screen-lobby-ticket .ticket {
+  --notch: 2.6vh;
+  width: min(100%, 64vh);
+}
+.screen-lobby-ticket .ticket-main {
+  justify-items: center;
+  padding: 4vh 3vh 3vh;
+  gap: 1vh;
+}
+.screen-lobby-ticket .ticket-code {
+  font-size: 19vh;
+}
+.screen-lobby-ticket .ticket-stub {
+  padding: 3.5vh 3vh 3vh;
+}
+.screen-lobby-ticket .ticket-stub .k-qr {
+  width: 30vh;
+}
+.screen-howto {
+  max-width: 34ch;
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--t-s);
+}
+.screen-howto strong {
+  color: var(--text);
+}
+.screen-lobby-side {
+  display: flex;
+  flex-direction: column;
+  gap: 3.5vh;
+  min-height: 0;
+  overflow: auto;
+}
+.screen-h {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5vh;
+  margin-bottom: 2vh;
+  font-size: var(--t-l);
+}
+.screen-who .wall {
+  --punch: 9vh;
+}
+/* 3 m floor: nothing on the screen view below --t-s. */
+.view-screen .eyebrow,
+.view-screen .section-h,
+.view-screen .picker-meta,
+.view-screen .selected-meta,
+.view-screen .ticket-fine,
+.view-screen .ticket-eyebrow,
+.view-screen .results-total {
+  font-size: var(--t-s);
+}
+.view-screen .punch-name {
+  font-size: var(--t-s);
+}
+.view-screen .wall-grid {
+  gap: 2.4vh 1.2vw;
+}
+.screen-host .picker {
+  grid-template-columns: repeat(auto-fill, minmax(40vh, 1fr));
+  gap: 1.6vh;
+}
+.view-screen .picker-card {
+  padding: 1.8vh 2vh;
+  border-radius: 1.6vh;
+}
+.view-screen .picker-title {
+  font-size: var(--t-m);
+}
+.screen-host-row {
+  display: flex;
+  align-items: center;
+  gap: 2vh;
+  margin-top: 2vh;
+}
+.screen-host-row .bots {
+  margin: 0;
+  flex: 1;
+}
+.screen-host-row .btn-start {
+  width: auto;
+  min-width: 36vh;
+  margin-left: auto;
+}
+.view-screen .btn {
+  border-radius: 1.6vh;
+}
+.view-screen .btn-s {
+  min-height: 5vh;
+  font-size: var(--t-s);
+}
+.screen-wait {
+  color: var(--muted);
+  font-size: var(--t-m);
+}
+.view-screen .selected {
+  padding: 2.4vh 3vh;
+  border-radius: 1.6vh;
+}
+
+.screen-play {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100vh;
+}
+.screen-stage {
+  min-height: 0;
+  overflow: hidden;
+}
+.screen-stage > .stage {
+  height: 100%;
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+  padding: 5vh 5vw;
+}
+.screen-results {
+  height: 100%;
+  overflow: auto;
+  padding: 5vh 5vw;
+}
+.rail {
+  display: flex;
+  align-items: center;
+  gap: 2.5vw;
+  padding: 1.4vh 3vw;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 55%, var(--bg));
+  color: var(--muted);
+  font-size: var(--t-s);
+}
+.rail .ticket-mini {
+  font-size: 3.4vh;
+}
+.rail strong {
+  color: var(--text);
+}
+.rail-host {
+  display: flex;
+  gap: 1.2vh;
+  margin-left: auto;
+}
+
+/* =========================================================
+   Game stage
+   ========================================================= */
+.stage {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: var(--s4);
+}
+.stage-msg {
+  display: grid;
+  justify-items: center;
+  gap: var(--s4);
+  padding: var(--s7) 0;
+  color: var(--muted);
+  text-align: center;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.loader {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+/* =========================================================
+   Results
+   ========================================================= */
+.results {
+  display: grid;
+  gap: var(--s3);
+  justify-items: start;
+}
+.results-winner {
+  font-size: var(--t-xl);
+  color: var(--highlight);
+  overflow-wrap: anywhere;
+}
+.results-summary {
+  color: var(--muted);
+}
+.results-list {
+  display: grid;
+  gap: var(--s2);
+  width: 100%;
+  margin: var(--s3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.results-row {
+  display: grid;
+  grid-template-columns: 2ch auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-m);
+  background: var(--surface);
+}
+.results-row.is-first {
+  box-shadow: inset 0 0 0 2px var(--highlight);
+}
+.results-row.is-me .results-name {
+  color: var(--highlight);
+}
+.results-place {
+  font-family: var(--font-mono);
+  color: var(--muted);
+  text-align: right;
+}
+.results-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+.results-you {
+  font-weight: 400;
+  color: var(--muted);
+}
+.results-pts {
+  display: grid;
+  justify-items: end;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.results-total {
+  font-size: calc(var(--t-s) * 0.8);
+  color: var(--muted);
+}
+.view-screen .results {
+  max-width: 120vh;
+  margin: 0 auto;
+}
+.view-screen .results-winner {
+  font-size: 11vh;
+}
+.view-screen .results-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 2vw;
+}
+.view-screen .results-row {
+  padding: 1vh 1.6vh;
+  border-radius: 1.6vh;
+}
+
+/* =========================================================
+   Connection chrome + end states
+   ========================================================= */
+/* The banner pushes the phone layout down (screens keep it as an overlay: their
+   layouts are a fixed 100vh and have top padding to spare). */
+:root {
+  --banner-h: calc(var(--safe-t) + 38px);
+}
+.is-reconnecting > .view-phone {
+  padding-top: 38px;
+}
+.is-reconnecting > .view-phone .phone-head {
+  top: var(--banner-h);
+  padding-top: var(--s2);
+}
+.banner {
+  box-sizing: border-box;
+  min-height: var(--banner-h);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  padding: calc(var(--safe-t) + var(--s2)) var(--s4) var(--s2);
+  background: var(--highlight);
+  color: var(--night);
+  font-weight: 700;
+  font-size: var(--t-s);
+}
+@keyframes blink {
+  50% {
+    opacity: 0.2;
+  }
+}
+.banner-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--night);
+  animation: blink 1s steps(2) infinite;
+}
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--safe-b) + 104px);
+  z-index: 40;
+  max-width: calc(100vw - 32px);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-m);
+  background: var(--surface-2);
+  border: 2px solid var(--line);
+  transform: translateX(-50%);
+  font-size: var(--t-s);
+  font-weight: 700;
+  box-shadow: 0 12px 30px -8px rgb(0 0 0 / 0.6);
+}
+.ended,
+.arriving {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: var(--s4);
+  max-width: 480px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: calc(var(--safe-t) + var(--s6)) calc(var(--gutter) + var(--safe-r)) calc(var(--safe-b) + var(--s6))
+    calc(var(--gutter) + var(--safe-l));
+}
+.arriving {
+  justify-items: center;
+  color: var(--muted);
+}
+.ended-title {
+  font-size: var(--t-xl);
+}
+.ended p {
+  color: var(--muted);
+}
+.ended-actions {
+  display: grid;
+  gap: var(--s3);
+  width: 100%;
+}

@@ -1,0 +1,495 @@
+/* Cave Rave: three glowing lanes under a stalactite edge. The only game allowed glow.
+   Tokens only (docs/DESIGN.md): --accent ultraviolet, --accent-2 glowstick, --stage near-black. */
+
+/* ---------- motif ---------- */
+.cr-stalactites {
+  display: block;
+  width: 100%;
+  height: 4vh;
+  fill: var(--bg);
+  filter: drop-shadow(0 0.6vh 1.2vh color-mix(in srgb, var(--accent) 70%, transparent));
+}
+
+/* ---------- duels (phone + screen) ---------- */
+.cr-duels {
+  display: grid;
+  gap: var(--s2);
+}
+/* Phone: the two sides stack (side by side, a 390 px row leaves a name one letter). */
+.cr-duel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 0;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-m);
+  background: var(--stage);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+.cr-duel.is-bye {
+  border-style: dashed;
+}
+.cr-duel > .cr-vs {
+  justify-self: start;
+  padding-left: 40px;
+  font-size: calc(var(--t-s) * 0.85);
+  line-height: 1;
+}
+.cr-side {
+  position: relative;
+  min-width: 0;
+  padding-bottom: 6px;
+}
+.cr-side .k-chip {
+  min-width: 0;
+}
+.cr-side .k-chip-trail {
+  font-family: var(--font-mono);
+}
+.cr-side.is-won .k-chip-name {
+  color: var(--accent-2);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--accent-2) 60%, transparent);
+}
+.cr-side.is-lost {
+  opacity: 0.45;
+}
+.cr-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent-2);
+  box-shadow: 0 0 10px var(--accent-2);
+  transition: width 600ms var(--ease-out);
+}
+.cr-vs {
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.cr-bye {
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  color: var(--muted);
+}
+
+/* ---------- sabotage feed ---------- */
+.cr-feed li {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  font-size: var(--t-s);
+}
+.cr-feed li.is-on {
+  background: color-mix(in srgb, var(--accent-2) 22%, var(--stage));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent-2) 45%, transparent);
+}
+
+/* ---------- phone: ready ---------- */
+.cr-face {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s4);
+  border-radius: var(--r-m);
+  background: var(--stage);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.cr-setup {
+  display: grid;
+  gap: var(--s3);
+}
+.cr-dock {
+  margin: 0 calc(-1 * var(--gutter));
+}
+.cr-warn {
+  color: var(--danger);
+}
+
+/* ---------- phone: calibration ---------- */
+.cr-cal-pad {
+  gap: var(--s4);
+  align-content: center;
+  box-shadow: 0 0 40px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.cr-cal-dots {
+  display: flex;
+  gap: 8px;
+}
+.cr-cal-dots i {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-ink);
+}
+.cr-cal-dots i.is-on {
+  background: var(--accent-ink);
+}
+
+/* ---------- phone: the highway ---------- */
+.cr-play {
+  display: grid;
+  gap: var(--s2);
+  margin: calc(-1 * var(--s2)) calc(-1 * (var(--gutter) + var(--safe-r))) 0 calc(-1 * (var(--gutter) + var(--safe-l)));
+}
+.cr-play-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s3);
+  padding: 0 var(--gutter);
+}
+.cr-opp {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+.cr-highway {
+  position: relative;
+  height: calc(100dvh - var(--safe-t) - var(--safe-b) - 150px);
+  min-height: 360px;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  background: var(--stage);
+  border-top: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.cr-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.cr-hud {
+  position: absolute;
+  top: var(--s3);
+  left: 0;
+  right: 0;
+  display: grid;
+  justify-items: center;
+  pointer-events: none;
+}
+.cr-score {
+  font-family: var(--font-mono);
+  font-size: var(--t-l);
+  color: var(--text);
+  text-shadow: 0 0 12px var(--accent);
+}
+.cr-combo {
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  color: var(--accent-2);
+}
+.cr-mute {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  padding: var(--s2) var(--s3);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--t-s);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.cr-fx-tags {
+  position: absolute;
+  top: var(--s3);
+  right: var(--s3);
+  display: grid;
+  gap: var(--s1);
+  pointer-events: none;
+}
+.cr-fx-tag {
+  padding: 2px var(--s2);
+  border-radius: var(--r-s);
+  background: var(--accent-2);
+  color: var(--accent-ink);
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  text-transform: uppercase;
+}
+.cr-highway.cr-wobble .cr-canvas {
+  animation: cr-wobble 380ms ease-in-out infinite;
+}
+@keyframes cr-wobble {
+  0%,
+  100% {
+    transform: rotate(0deg) translateX(0);
+  }
+  25% {
+    transform: rotate(2.5deg) translateX(14px) scale(1.03);
+  }
+  75% {
+    transform: rotate(-2.5deg) translateX(-14px) scale(0.97);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Still a handicap, without the shaking: a tilt and a blur. */
+  .cr-highway.cr-wobble .cr-canvas {
+    animation: none;
+    transform: rotate(4deg) scale(1.05);
+    filter: blur(1.5px);
+  }
+}
+
+/* ---------- phone: meddle ---------- */
+.cr-meddle-state {
+  font-size: var(--t-l);
+  font-family: var(--font-display);
+  margin: var(--s1) 0 var(--s2);
+}
+.cr-charge {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent-2);
+  box-shadow: 0 0 12px var(--accent-2);
+  transition: width 200ms linear;
+}
+.cr-tricks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s2);
+}
+.cr-trick {
+  display: grid;
+  gap: var(--s1);
+  min-height: 84px;
+  padding: var(--s2);
+  border-radius: var(--r-m);
+  border: 2px solid var(--line);
+  background: var(--stage);
+  color: var(--text);
+  text-align: left;
+  touch-action: manipulation;
+}
+.cr-trick strong {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--t-m);
+}
+.cr-trick small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+}
+.cr-trick.is-on {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--accent-2) 50%, transparent);
+}
+.cr-targets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2);
+}
+.cr-target {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--tap);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-m);
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  overflow: hidden;
+  touch-action: manipulation;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+.cr-target span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cr-target:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.cr-target:disabled {
+  background: var(--surface);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+/* ---------- reveal / done ---------- */
+.cr-call.is-won {
+  color: var(--accent-2);
+  text-shadow: 0 0 24px color-mix(in srgb, var(--accent-2) 60%, transparent);
+}
+.cr-call.is-lost {
+  color: var(--accent);
+}
+.cr-call {
+  animation: k-pop var(--d-pop) var(--ease-pop) both;
+}
+.cr-versus {
+  font-family: var(--font-mono);
+  font-size: var(--t-l);
+}
+.cr-champ {
+  display: grid;
+  justify-items: center;
+  gap: var(--s3);
+  text-align: center;
+}
+.cr-champ .k-avatar,
+.cr-champ > :first-child {
+  filter: drop-shadow(0 0 22px var(--accent-2));
+  animation: k-pop var(--d-pop) var(--ease-pop) both;
+}
+.cr-history {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(150px, 1fr);
+  gap: var(--s3);
+  overflow-x: auto;
+}
+.cr-col {
+  display: grid;
+  align-content: start;
+  gap: var(--s2);
+}
+.cr-past {
+  display: grid;
+  gap: 2px;
+  padding: var(--s2);
+  border-radius: var(--r-s);
+  background: var(--stage);
+}
+.cr-past-loser {
+  font-size: var(--t-s);
+  color: var(--muted);
+}
+
+/* ---------- screen ---------- */
+.cr-screen {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  height: calc(100% + 10vh);
+  margin: -5vh -5vw;
+  padding: 0 5vw 3vh;
+  background:
+    linear-gradient(90deg, transparent 33.1%, color-mix(in srgb, var(--accent) 10%, transparent) 33.3%, transparent 33.5%, transparent 66.5%, color-mix(in srgb, var(--accent) 10%, transparent) 66.7%, transparent 66.9%),
+    var(--stage);
+}
+.cr-screen .cr-stalactites {
+  margin: 0 -5vw;
+  width: calc(100% + 10vw);
+  height: 6vh;
+}
+.cr-screen-head {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 3vw;
+}
+.cr-screen-head .k-timer {
+  justify-self: end;
+}
+.cr-screen-call {
+  font-size: 11vh;
+  text-shadow: 0 0 4vh color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: k-pop var(--d-pop) var(--ease-pop) both;
+  text-align: center;
+}
+.cr-progress {
+  height: 0.8vh;
+  margin: 1vh 0 2vh;
+  border-radius: 0.4vh;
+  background: var(--surface);
+  overflow: hidden;
+}
+.cr-progress.is-idle {
+  visibility: hidden;
+}
+.cr-progress span {
+  display: block;
+  height: 100%;
+  background: var(--accent-2);
+  box-shadow: 0 0 2vh var(--accent-2);
+}
+.cr-screen-body {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+  gap: 3vw;
+  min-height: 0;
+  padding-top: 2vh;
+}
+.cr-screen-main {
+  display: grid;
+  align-content: start;
+  gap: 3vh;
+  min-height: 0;
+  overflow: hidden;
+}
+.cr-screen .cr-duels {
+  grid-template-columns: repeat(auto-fill, minmax(38vw, 1fr));
+  gap: 1.4vh 2vw;
+}
+.cr-screen .cr-duel {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: var(--s2);
+  padding: 1.2vh 1.6vw;
+  border-radius: 2vh;
+  box-shadow: 0 0 3vh color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.cr-screen .cr-duel.is-bye {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.cr-screen .cr-duel > .cr-vs {
+  justify-self: center;
+  padding-left: 0;
+  font-size: var(--t-s);
+}
+.cr-screen .cr-side {
+  padding-bottom: 1vh;
+}
+.cr-screen .cr-bar {
+  height: 0.7vh;
+}
+.cr-screen .k-chip-name,
+.cr-screen .k-chip-trail {
+  font-size: var(--t-m);
+}
+.cr-screen .cr-history {
+  grid-auto-columns: minmax(16vw, 22vw);
+  justify-content: start;
+  gap: 1.5vw;
+}
+.cr-screen .cr-past {
+  padding: 0.8vh 1vw;
+}
+.cr-screen .cr-past .k-chip-name,
+.cr-screen .cr-past .k-chip-trail {
+  font-size: var(--t-s);
+}
+.cr-meddlers {
+  display: grid;
+  align-content: start;
+  gap: 1.6vh;
+  padding: 2vh 1.4vw;
+  border-left: 2px solid color-mix(in srgb, var(--accent-2) 40%, var(--line));
+  min-height: 0;
+  overflow: hidden;
+}
+.cr-out {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1vh;
+}
+.cr-screen .cr-feed li {
+  padding: 1vh 1vw;
+  border-radius: 1.2vh;
+}
+.cr-champ.is-big {
+  padding: 3vh 0;
+}

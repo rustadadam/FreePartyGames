@@ -1,0 +1,113 @@
+/* Design tokens. Source of truth: docs/DESIGN.md. Components use the semantic
+   aliases (--bg, --accent, ...), never the raw palette names. */
+:root {
+  /* palette */
+  --night: #1a1033;
+  --velvet: #2b1c52;
+  --seam: #463575;
+  --chalk: #fbf6ff;
+  --haze: #b3a6d9;
+  --raffle: #ff5e87;
+  --marquee: #ffd447;
+
+  /* semantic */
+  --bg: var(--night);
+  --surface: var(--velvet);
+  --surface-2: #35245f;
+  --line: var(--seam);
+  --text: var(--chalk);
+  --muted: var(--haze);
+  --accent: var(--raffle);
+  --accent-ink: var(--night);
+  --accent-2: var(--marquee);
+  --highlight: var(--marquee);
+  --stage: var(--velvet);
+  --danger: #ff7a59;
+  --ok: #6fe3a1;
+
+  /* type */
+  --font-display: 'Bagel Fat One', 'Arial Rounded MT Bold', system-ui, sans-serif;
+  --font-body: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Martian Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --t-mega: 64px;
+  --t-xl: 36px;
+  --t-l: 24px;
+  --t-m: 18px;
+  --t-s: 14px;
+
+  /* space + shape */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --r-s: 10px;
+  --r-m: 16px;
+  --r-l: 24px;
+  --tap: 56px;
+  --gutter: 16px;
+
+  /* safe areas */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+
+  /* motion */
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --d-fast: 150ms;
+  --d-pop: 420ms;
+}
+
+/* The screen view scales with the TV, not with pixels: 1080p -> these vh values. */
+.view-screen {
+  --t-mega: 16vh;
+  --t-xl: 7vh;
+  --t-l: 4.4vh;
+  --t-m: 3vh;
+  --t-s: 2.2vh;
+  --tap: 6vh;
+  --gutter: 3.5vh;
+}
+
+/* Per-game sub-palettes (docs/DESIGN.md, Games). Ids are manifest ids. */
+[data-game='forgery'] {
+  --accent: #e9b949;
+  --accent-ink: #1d1406;
+  --accent-2: #e5484d;
+  --stage: #221a33;
+}
+[data-game='comic-strip-club'] {
+  --accent: #36c5f4;
+  --accent-ink: #0b1a24;
+  --accent-2: #ffe14d;
+  --stage: #1c1a3a;
+}
+[data-game='cracked-cookbook'] {
+  --accent: #ffb020;
+  --accent-ink: #2a1600;
+  --accent-2: #6ccb5f;
+  --stage: #2a1a2e;
+}
+[data-game='wiki-what'] {
+  --accent: #7aa2ff;
+  --accent-ink: #0b1433;
+  --accent-2: #c58b5a;
+  --stage: #17183a;
+}
+[data-game='cave-rave'] {
+  --accent: #b76cff;
+  --accent-ink: #12051f;
+  --accent-2: #3dffb5;
+  --stage: #0b0716;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --d-fast: 0ms;
+    --d-pop: 0ms;
+  }
+}

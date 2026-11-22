@@ -1,0 +1,43 @@
+/* Game-local styles ride in the game's lazy chunk. Use tokens only (docs/DESIGN.md). */
+.tap-screen {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.tap-call .g-call {
+  font-size: 20vh;
+  animation: k-pop var(--d-pop) var(--ease-pop) both;
+}
+/* "Wait" is chalk, "TAP!" is the accent: the change of color is the cue. */
+.tap-call-wait {
+  color: var(--text);
+}
+.tap-call-reveal,
+.tap-call-done {
+  color: var(--highlight);
+  font-size: 12vh !important;
+}
+.tap-screen .k-reveal {
+  grid-template-columns: repeat(auto-fill, minmax(30vh, 1fr));
+  gap: 1.6vh;
+}
+.tap-screen .k-chip,
+.tap-hit ~ .k-reveal .k-chip {
+  padding: var(--s2) var(--s4) var(--s2) var(--s2);
+  border-radius: 999px;
+  background: var(--surface);
+}
+/* Phone: the waiting button is a dark trap; it lights up on GO. */
+.tap-hit.tap-wait {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 0 0 3px var(--line);
+}
+.tap-hit.tap-reveal,
+.tap-hit.tap-done {
+  min-height: 30vh;
+  font-size: var(--t-xl);
+  padding: var(--s5);
+  color: var(--highlight);
+}
+.tap-hit.tap-locked {
+  color: var(--danger);
+}

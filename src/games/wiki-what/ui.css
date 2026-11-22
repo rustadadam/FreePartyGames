@@ -1,0 +1,217 @@
+/* Wiki-what: the footnote motif. Tokens only (docs/DESIGN.md). */
+.ww-head {
+  align-items: center;
+}
+.ww-team {
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  color: var(--muted);
+}
+.ww-team b {
+  color: var(--accent);
+  font-size: var(--t-l);
+}
+.ww-q {
+  display: grid;
+  gap: var(--s3);
+}
+.ww-q-text {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--t-l);
+  line-height: 1.15;
+}
+.ww-q-l {
+  padding: 3vh 4vh;
+  border-radius: var(--r-l);
+  background: var(--stage);
+  border: 2px solid var(--line);
+}
+.ww-q-l .ww-q-text {
+  font-size: 5.2vh;
+}
+/* Footnote: hairline, then the citation in mono. */
+.ww-cite {
+  margin: 0;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  color: var(--muted);
+}
+.ww-fact {
+  font-family: var(--font-body);
+  color: var(--text);
+}
+.ww-choices {
+  display: grid;
+  gap: var(--s3);
+}
+.ww-choices-l {
+  grid-template-columns: 1fr 1fr;
+  gap: 2vh;
+}
+.ww-choice {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--tap, 56px);
+  padding: var(--s4);
+  border: 2px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--t-m);
+  font-weight: 700;
+  text-align: left;
+  touch-action: manipulation;
+}
+.ww-choice:active:not(:disabled) {
+  transform: translateY(2px);
+}
+.ww-mark {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--accent);
+  font-size: 0.8em;
+  align-self: flex-start;
+}
+.ww-choice-text {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.ww-choice:disabled {
+  opacity: 1;
+}
+.ww-choice.is-locked {
+  color: var(--muted);
+}
+.ww-choice.is-mine {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+}
+.ww-choice.is-right {
+  border-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 22%, var(--surface));
+  animation: k-pop var(--d-pop) var(--ease-pop) both;
+}
+.ww-choice.is-wrong {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 18%, var(--surface));
+}
+.ww-count,
+.ww-tag {
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  color: var(--muted);
+}
+.ww-tag {
+  color: var(--accent);
+}
+.ww-verdict {
+  margin: 0;
+  font-size: var(--t-l);
+  font-weight: 700;
+}
+.ww-verdict.is-right {
+  color: var(--ok);
+}
+.ww-verdict.is-wrong {
+  color: var(--danger);
+}
+.ww-reveal {
+  display: grid;
+  gap: var(--s3);
+}
+.ww-votes {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-s);
+  color: var(--muted);
+}
+.ww-vp + .ww-vp::before {
+  content: ', ';
+}
+.ww-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+.ww-pill {
+  opacity: 0.35;
+  transition: opacity var(--d-fast, 150ms);
+}
+.ww-pill.is-in {
+  opacity: 1;
+}
+/* The Mole is bracketed: "citation needed". */
+.ww-bracket {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s3) var(--s4);
+  border-left: 4px solid var(--accent-2);
+  border-right: 4px solid var(--accent-2);
+  border-radius: var(--r-s);
+  background: color-mix(in srgb, var(--accent-2) 14%, transparent);
+}
+.ww-cn {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  color: var(--accent-2);
+}
+.ww-screen {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.ww-stage {
+  display: grid;
+  align-content: center;
+  gap: 2.4vh;
+}
+.ww-screen .ww-choice {
+  font-size: 3.6vh;
+  padding: 2.4vh 2.6vh;
+}
+.ww-screen .ww-verdict {
+  font-size: 4.4vh;
+}
+.ww-screen .ww-cite,
+.ww-screen .ww-votes {
+  font-size: var(--t-s);
+}
+.ww-screen .ww-standings {
+  grid-template-columns: repeat(auto-fill, minmax(34vh, 1fr));
+  gap: 1.4vh;
+  text-align: left;
+}
+/* In columns, each standing is its own pill, so a score never reads as the next player's. */
+.ww-screen .ww-standings .k-chip {
+  padding: 0.8vh 2.4vh 0.8vh 0.8vh;
+  border-radius: 999px;
+  background: var(--surface);
+}
+.ww-screen .ww-bracket .g-title {
+  font-size: 7vh;
+}
+
+/* The role card every player gets while asking: compact, so the four choices stay high. */
+.ww-role {
+  gap: var(--s1);
+  padding: var(--s2) var(--s4);
+}
+.ww-role .k-prompt-veil {
+  font-size: var(--t-s);
+}
+.ww-role .k-prompt-body {
+  min-height: 0;
+  font-size: var(--t-s);
+  font-family: var(--font-body);
+  font-weight: 700;
+  line-height: 1.3;
+}
