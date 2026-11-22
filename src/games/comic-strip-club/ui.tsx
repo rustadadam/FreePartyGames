@@ -10,8 +10,11 @@ import {
   Timer,
   Vote,
   playerOf,
+  sfx,
   useAssets,
   useServerNow,
+  useSfxCount,
+  useSfxCue,
   type Drawing,
   type Stroke,
 } from '../../client/kit';
@@ -20,11 +23,21 @@ import type { Lobby } from '../../shared/types';
 import type { CscAction, CscView, Panel, Remix, StripView } from './logic';
 import { MAX_PROMPT_CHARS, PANEL_ASPECT, PANELS } from './constants';
 import { PREMISES } from './content';
+import { play } from './sfx';
 import './ui.css';
 
 const INKS = ['#14101f', '#e5484d', '#ff8a1f', '#f2c200', '#3fbf6f', '#1d8fe0', '#7a5cff', '#8b5a2b'];
 
 // ---------- shared bits ----------
+
+/** Sound (room audio device only): a tick per premise, panel and vote in; a rimshot for the tally. */
+function useComicCues(view: CscView) {
+  useSfxCount(view.done.length);
+  useSfxCount(view.voted.length);
+  useSfxCue(view.phase, (p) => p === 'tally' && play('rimshot'));
+}
+
+const flip = () => play('flip');
 
 function assetIds(view: CscView): string[] {
   const ids: string[] = [];
@@ -129,6 +142,7 @@ function RevealPhone({ view, assets, lobby }: { view: CscView; assets: AssetMap;
   const strips = view.strips!;
   const r = view.reveal!;
   const { idx, start } = useStripClock(r.startAt, r.stripMs, strips.length);
+  useSfxCue(idx, () => sfx.play('card'));
   if (idx < 0) return <p class="g-call cs-call">Strips start soon…</p>;
   const strip = strips[idx];
   return (
@@ -141,6 +155,7 @@ function RevealPhone({ view, assets, lobby }: { view: CscView; assets: AssetMap;
         layout="single"
         startAt={start}
         interval={r.stepMs}
+        sound={(i) => i > 0 && flip()}
         items={[
           <Caption key="c" auto={strip.auto}>
             {strip.prompt}
@@ -156,6 +171,7 @@ function RevealScreen({ view, assets, lobby }: { view: CscView; assets: AssetMap
   const strips = view.strips!;
   const r = view.reveal!;
   const { idx, start } = useStripClock(r.startAt, r.stripMs, strips.length);
+  useSfxCue(idx, () => sfx.play('card'));
   if (idx < 0) return <div class="g-center"><p class="g-call cs-call">Strips start soon…</p></div>;
   const strip = strips[idx];
   return (
@@ -173,6 +189,7 @@ function RevealScreen({ view, assets, lobby }: { view: CscView; assets: AssetMap
           layout="row"
           startAt={start + r.stepMs}
           interval={r.stepMs}
+          sound={flip}
           items={strip.panels.map((p, i) => (
             <div key={i} class="cs-pane">
               <PanelBox asset={p.asset} assets={assets} animate />
@@ -209,6 +226,7 @@ function RemixView({ view, assets, lobby, screen }: { view: CscView; assets: Ass
           layout={screen ? 'row' : 'single'}
           startAt={start}
           interval={step}
+          sound={flip}
           items={strip.panels.map((p, i) => (
             <div key={i} class="cs-pane">
               <PanelBox asset={p.asset} assets={assets} animate />
@@ -366,6 +384,7 @@ function VoteStep({ view, send, assets, lobby, me }: { view: CscView; send(a: Cs
 // ---------- Player ----------
 
 function Player({ view, send, me, assets: _a, lobby }: PlayerProps<CscView, CscAction>) {
+  useComicCues(view);
   const assets = useAssets(assetIds(view));
   const screenOn = lobby.screenConnected;
   const body = (() => {
@@ -403,6 +422,7 @@ function Player({ view, send, me, assets: _a, lobby }: PlayerProps<CscView, CscA
 // ---------- Screen ----------
 
 function Screen({ view, assets: _a, lobby }: ScreenProps<CscView>) {
+  useComicCues(view);
   const assets = useAssets(assetIds(view));
   switch (view.phase) {
     case 'prompt':

@@ -2,7 +2,7 @@
 // answers are numbered like verses ("3:1", "3:2"), witness counts are small marks on the plate,
 // and a temple silhouette sits quietly behind the prompt.
 import { useState } from 'preact/hooks';
-import { Avatar, PromptCard, RevealStage, RulesSheet, Timer, playerOf, useServerNow } from '../../client/kit';
+import { Avatar, PromptCard, RevealStage, RulesSheet, Timer, playerOf, useServerNow, useSfxCount } from '../../client/kit';
 import type { ClientGameModule, PlayerProps, ScreenProps } from '../../client/gameModule';
 import type { Lobby } from '../../shared/types';
 // Type-only imports from logic.ts: a value import would pull zod and the game logic into this chunk.
@@ -20,6 +20,7 @@ import {
   WRITE_MS,
   type Outcome,
 } from './rules';
+import { play } from './sfx';
 import './ui.css';
 
 const OUTCOME_LABEL: Record<Outcome, string> = {
@@ -313,6 +314,15 @@ function MergePlayer({ view, send }: { view: SWView; send(a: SWAction): void }) 
 
 // ---------- reveal ----------
 
+/** A plate's sound as it is revealed: a lone clink, or a chime with one note per witness. */
+function plateSound(view: SWView) {
+  return (i: number) => {
+    const n = view.reveal?.groups[i]?.members.length ?? 1;
+    if (n >= 2) play('witness', { n });
+    else play('clink');
+  };
+}
+
 function useRevealDone(view: SWView): boolean {
   const now = useServerNow(250);
   const r = view.reveal;
@@ -406,6 +416,7 @@ function RevealPlayer({ view, lobby, me }: { view: SWView; lobby: Lobby; me: str
           class="sw-stack"
           startAt={r.startAt}
           interval={r.interval}
+          sound={plateSound(view)}
           items={r.groups.map((g) => (
             <RevealPlate key={g.id} g={g} lobby={lobby} />
           ))}
@@ -436,6 +447,7 @@ function RevealScreen({ view, lobby }: { view: SWView; lobby: Lobby }) {
               layout="single"
               startAt={r.startAt}
               interval={r.interval}
+              sound={plateSound(view)}
               items={r.groups.map((g) => (
                 <RevealPlate key={g.id} g={g} lobby={lobby} big />
               ))}
@@ -501,6 +513,7 @@ function FinalBoard({ view, lobby, me, big }: { view: SWView; lobby: Lobby; me?:
 // ---------- shells ----------
 
 function Player({ view, send, lobby, me }: PlayerProps<SWView, SWAction>) {
+  useSfxCount(view.locked.length); // a tick per answer in, per Done in the merge
   if (view.phase === 'write') return <WritePlayer view={view} send={send} lobby={lobby} />;
   if (view.phase === 'merge' && view.merge && view.you) return <MergePlayer view={view} send={send} />;
   if (view.phase === 'reveal' && view.reveal) return <RevealPlayer view={view} lobby={lobby} me={me} />;
@@ -514,6 +527,7 @@ function Player({ view, send, lobby, me }: PlayerProps<SWView, SWAction>) {
 }
 
 function Screen({ view, lobby }: ScreenProps<SWView>) {
+  useSfxCount(view.locked.length);
   if (view.phase === 'reveal' && view.reveal) return <RevealScreen view={view} lobby={lobby} />;
   if (view.phase === 'final' || view.phase === 'done') {
     return (

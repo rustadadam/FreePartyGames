@@ -14,8 +14,10 @@ import {
   Timer,
   Vote,
   playerOf,
+  sfx,
   useAssets,
   useServerNow,
+  useSfxCount,
   type Drawing,
   type Stroke,
 } from '../../client/kit';
@@ -24,6 +26,7 @@ import type { Lobby } from '../../shared/types';
 // Type-only imports from logic.ts: a value import would pull zod and the game logic into this chunk.
 import type { CookAction, CookView, DishView, Sticker } from './logic';
 import { COOK_MS, DRAW_MS, MAX_STICKERS, NAME_MAX, PROP_PTS, STICKER_BASE_PCT, VOTE_MS, VOTE_PTS } from './rules';
+import { play } from './sfx';
 import './ui.css';
 
 type Pantry = CookView['pantry'];
@@ -115,11 +118,18 @@ function phaseLabel(v: CookView): string {
   return 'Results';
 }
 
+/** Sound (room audio device only): a tick per drawing and vote in; a service bell per dish in. */
+function useCookCues(view: CookView, lobby: Lobby) {
+  const open = view.phase === 'draw' || view.phase === 'cook' || view.phase === 'vote';
+  const done = open ? Math.max(0, lobby.inGame.length - view.waiting.length) : 0;
+  useSfxCount(done, view.phase === 'cook' ? () => play('serve', { vol: 0.6 }) : 'lockIn');
+}
+
 function Bar({ view, size }: { view: CookView; size?: 'm' | 'l' }) {
   return (
     <div class="g-spread cc-bar">
       <span class="cc-tape eyebrow">{phaseLabel(view)}</span>
-      <Timer deadline={view.deadline} total={phaseTotal(view.phase)} size={size} />
+      <Timer deadline={view.deadline} total={phaseTotal(view.phase)} size={size} quiet={view.phase !== 'draw' && view.phase !== 'cook' && view.phase !== 'vote'} />
     </div>
   );
 }
@@ -246,6 +256,7 @@ function Compose({ view, send, assets }: { view: CookView; send(a: CookAction): 
     setPlaced([...placed, { uid, p, x: 500 + ((uid * 97) % 240) - 120, y: 500 + ((uid * 61) % 240) - 120, s: 1, r: 0 }]);
     setSel(uid);
     setMode('place');
+    play('sticker');
   };
   const remove = () => {
     setPlaced(placed.filter((p) => p.uid !== sel));
@@ -438,12 +449,15 @@ function RevealBoard({ view, assets, lobby, me, size }: { view: CookView; assets
   const r = view.reveal!;
   const items = r.order.map((id) => <DishReveal key={id} dish={view.dishes[id]} res={r.detail[id]} lobby={lobby} pantry={view.pantry} assets={assets} />);
   items.push(<Standings key="board" scores={view.scores ?? {}} lobby={lobby} me={me} size={size} />);
-  return <RevealStage items={items} startAt={r.startAt} interval={r.interval} layout="single" class="cc-stage" />;
+  // Each dish arrives with the service bell; the scoreboard with the points ding.
+  const sound = (i: number) => (i < r.order.length ? play('serve') : sfx.play('score'));
+  return <RevealStage items={items} startAt={r.startAt} interval={r.interval} layout="single" class="cc-stage" sound={sound} />;
 }
 
 // ------------------------------------------------------------------ top-level components
 
 function Player({ view, send, lobby, me, assets: _shared }: PlayerProps<CookView, CookAction>) {
+  useCookCues(view, lobby);
   const assets = useAssets(assetIds(view));
   const you = view.you;
   if (!you) return <p class="g-muted">You joined after this game started. Watch the screen.</p>;
@@ -478,6 +492,7 @@ function Player({ view, send, lobby, me, assets: _shared }: PlayerProps<CookView
 }
 
 function Screen({ view, lobby, assets: _shared }: ScreenProps<CookView>) {
+  useCookCues(view, lobby);
   const assets = useAssets(assetIds(view));
 
   if (view.phase === 'draw') {

@@ -7,9 +7,11 @@
 // Each song is downloaded once and played from a blob URL: Cloudflare's static assets ignore
 // HTTP Range requests, which Safari needs to play a plain <audio src>. Two players crossfade
 // between songs and across each song's loop point, through Web Audio gain nodes because iOS
-// ignores HTMLAudioElement.volume.
+// ignores HTMLAudioElement.volume. The decks feed the shared engine's music bus, which sound
+// effects duck under big stingers (engine.ts).
 import { useEffect, useState } from 'preact/hooks';
 import type { Lobby } from '../../shared/types';
+import { audioCtx, bindUnlock, musicOut } from './engine';
 
 const FILES = import.meta.glob('../../../songs/*.mp3', { eager: true, query: '?url', import: 'default' }) as Record<
   string,
@@ -43,17 +45,13 @@ export interface MusicState {
   blocked: boolean;
 }
 
-type AudioCtor = typeof AudioContext;
-
 class Music {
-  private ctx: AudioContext | null = null;
   private decks: Deck[] = [];
   private live = 0;
   private url: string | null = null;
   private crossing = false;
   private blobs = new Map<string, Promise<string>>();
   private listeners = new Set<() => void>();
-  private unlockBound = false;
   state: MusicState = { wanted: false, enabled: readEnabled(), blocked: false };
 
   /** Play this song (looping), crossfading from whatever is on; null fades to silence. */
@@ -74,9 +72,8 @@ class Music {
     this.apply();
   }
 
-  /** Called from a tap: browsers only start audio inside a user gesture. */
+  /** Called from a tap (engine.bindUnlock): browsers only start audio inside a user gesture. */
   unlock(): void {
-    void this.ctx?.resume();
     if (this.state.blocked && this.url && this.state.enabled) {
       const deck = this.decks[this.live];
       if (deck?.el.src) void this.start(deck);
@@ -99,7 +96,7 @@ class Music {
       for (const d of this.decks) this.fadeOut(d);
       return;
     }
-    this.bindUnlock();
+    bindUnlock(() => this.unlock());
     void this.switchTo(this.url);
   }
 
@@ -125,8 +122,9 @@ class Music {
   private async start(deck: Deck): Promise<void> {
     try {
       await deck.el.play();
-      if (this.ctx && this.ctx.state !== 'running') await this.ctx.resume().catch(() => {});
-      const running = !this.ctx || this.ctx.state === 'running';
+      const ctx = audioCtx();
+      if (ctx && ctx.state !== 'running') await ctx.resume().catch(() => {});
+      const running = !ctx || ctx.state === 'running';
       this.set({ blocked: !running });
       this.fadeIn(deck);
     } catch {
@@ -145,12 +143,13 @@ class Music {
   }
 
   private fadeIn(deck: Deck): void {
-    if (!deck.gain || !this.ctx) {
+    const ctx = audioCtx();
+    if (!deck.gain || !ctx) {
       deck.el.volume = VOLUME;
       return;
     }
     const g = deck.gain.gain;
-    const now = this.ctx.currentTime;
+    const now = ctx.currentTime;
     g.cancelScheduledValues(now);
     g.setValueAtTime(g.value, now);
     g.linearRampToValueAtTime(VOLUME, now + FADE_S);
@@ -158,9 +157,10 @@ class Music {
 
   private fadeOut(deck: Deck): void {
     const gen = deck.gen;
-    if (deck.gain && this.ctx) {
+    const ctx = audioCtx();
+    if (deck.gain && ctx) {
       const g = deck.gain.gain;
-      const now = this.ctx.currentTime;
+      const now = ctx.currentTime;
       g.cancelScheduledValues(now);
       g.setValueAtTime(g.value, now);
       g.linearRampToValueAtTime(0, now + FADE_S);
@@ -177,27 +177,18 @@ class Music {
     el.preload = 'auto';
     el.addEventListener('timeupdate', () => this.nearEnd(i));
     let gain: GainNode | null = null;
-    const ctx = this.audio();
-    if (ctx) {
+    const ctx = audioCtx();
+    const out = musicOut();
+    if (ctx && out) {
       gain = ctx.createGain();
       gain.gain.value = 0;
-      ctx.createMediaElementSource(el).connect(gain).connect(ctx.destination);
+      ctx.createMediaElementSource(el).connect(gain).connect(out);
     } else {
       el.volume = 0;
     }
     d = { el, gain, gen: 0 };
     this.decks[i] = d;
     return d;
-  }
-
-  private audio(): AudioContext | null {
-    if (this.ctx) return this.ctx;
-    const Ctor = (window.AudioContext ?? (window as Window & { webkitAudioContext?: AudioCtor }).webkitAudioContext) as
-      | AudioCtor
-      | undefined;
-    if (!Ctor) return null;
-    this.ctx = new Ctor();
-    return this.ctx;
   }
 
   private blob(url: string): Promise<string> {
@@ -213,14 +204,6 @@ class Music {
       this.blobs.set(url, p);
     }
     return p;
-  }
-
-  private bindUnlock(): void {
-    if (this.unlockBound) return;
-    this.unlockBound = true;
-    const unlock = () => this.unlock();
-    document.addEventListener('pointerdown', unlock, true);
-    document.addEventListener('keydown', unlock, true);
   }
 }
 
@@ -247,6 +230,9 @@ export function useRoomMusic(lobby: Lobby | null, plays: boolean): void {
 
 export function useMusicState(): MusicState {
   const [state, setState] = useState(music.state);
-  useEffect(() => music.subscribe(() => setState(music.state)), []);
+  useEffect(() => {
+    setState(music.state); // it may have changed between this render and the subscription
+    return music.subscribe(() => setState(music.state));
+  }, []);
   return state;
 }

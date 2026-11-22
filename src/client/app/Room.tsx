@@ -1,9 +1,9 @@
 // Everything inside a room: picks the screen or phone view, and owns the
 // connection chrome (reconnect banner, error toast, wake lock, end states).
 import { useEffect, useState } from 'preact/hooks';
+import { useRoomAudio } from '../audio/room';
 import { RoomContext, useRoomState } from '../net/context';
 import type { EndReason, RoomClient, RoomState } from '../net/room';
-import { useRoomMusic } from './music';
 import { PlayerView } from './PlayerView';
 import { ScreenView } from './ScreenView';
 import { useWakeLock } from './wakeLock';
@@ -30,11 +30,12 @@ export function Room({ client, onExit, onRejoin }: { client: RoomClient; onExit(
   const state = useRoomState(client);
   // Phones and the TV both stay awake: a laptop screen dimming mid-game is as bad as a phone locking.
   useWakeLock(state.status !== 'ended');
-  // One device per room plays music: the TV, or the host's phone when no TV is connected.
-  const playsMusic =
+  // One device per room plays music and sound effects: the TV, or the host's phone when no TV
+  // is connected. Every other phone stays silent; the room's sound comes from the main screen.
+  const playsAudio =
     !state.ended &&
     (state.you?.kind === 'screen' || (state.you?.kind === 'player' && client.isHost && !state.lobby?.screenConnected));
-  useRoomMusic(state.lobby ?? null, playsMusic);
+  useRoomAudio(state.lobby ?? null, playsAudio);
 
   if (state.ended) {
     const e = ENDED[state.ended];

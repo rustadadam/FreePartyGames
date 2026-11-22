@@ -1,7 +1,8 @@
 // The card a prompt, category or secret word sits on. Index-card proportions with a
 // punched corner; `secret` adds a hide/show toggle against shoulder-surfing.
 import type { ComponentChildren } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
+import { sfx } from '../audio/sfx';
 
 export interface PromptCardProps {
   /** Small mono label above the text, e.g. "Category" or "Your secret word". */
@@ -17,11 +18,16 @@ export interface PromptCardProps {
   tone?: 'plain' | 'accent';
   /** Optional footnote line (e.g. a source citation). */
   footer?: ComponentChildren;
+  /** Don't play the card flick when it appears. */
+  quiet?: boolean;
   class?: string;
 }
 
-export function PromptCard({ eyebrow, children, secret, hidden, size = 'm', tone = 'plain', footer, class: cls }: PromptCardProps) {
+export function PromptCard({ eyebrow, children, secret, hidden, size = 'm', tone = 'plain', footer, quiet, class: cls }: PromptCardProps) {
   const [shown, setShown] = useState(!hidden);
+  useEffect(() => {
+    if (!quiet) sfx.play('card');
+  }, []);
   return (
     <div class={`k-prompt k-prompt-${size} k-prompt-${tone}${secret ? ' is-secret' : ''}${cls ? ` ${cls}` : ''}`}>
       {(eyebrow || secret) && (

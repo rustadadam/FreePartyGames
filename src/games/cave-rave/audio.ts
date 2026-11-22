@@ -1,19 +1,14 @@
 // Cave Rave sound: every voice is synthesized with Web Audio from the chart (no audio files).
 // Times on this page live in the performance.now() domain ("perf ms"); the AudioContext has its
-// own clock, so perfToCtx() maps between them. One context per page, unlocked by a user tap (iOS).
+// own clock, so perfToCtx() maps between them. The context and noise are the page's shared ones
+// (src/client/audio/engine.ts), unlocked by a user tap (iOS). The song has its own bus, apart
+// from the room's music and sound effects.
+import { audioCtx, noiseBuffer, unlock } from '../../client/audio/engine';
 import type { Chart } from './chart';
 
 let ac: AudioContext | null = null;
 let master: GainNode | null = null;
 let noise: AudioBuffer | null = null;
-
-type ACtor = typeof AudioContext;
-
-function ctor(): ACtor | null {
-  if (typeof window === 'undefined') return null;
-  const w = window as unknown as { AudioContext?: ACtor; webkitAudioContext?: ACtor };
-  return w.AudioContext ?? w.webkitAudioContext ?? null;
-}
 
 export function audioState(): 'none' | 'locked' | 'running' {
   if (!ac) return 'none';
@@ -22,10 +17,9 @@ export function audioState(): 'none' | 'locked' | 'running' {
 
 /** Call from a user gesture (pointerdown/click). Creates and resumes the context. */
 export function unlockAudio(): void {
-  const C = ctor();
-  if (!C) return;
   if (!ac) {
-    ac = new C({ latencyHint: 'interactive' });
+    ac = audioCtx();
+    if (!ac) return;
     const comp = ac.createDynamicsCompressor();
     comp.threshold.value = -10;
     comp.ratio.value = 4;
@@ -33,23 +27,9 @@ export function unlockAudio(): void {
     master = ac.createGain();
     master.gain.value = 0.8;
     master.connect(comp);
-    noise = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.5), ac.sampleRate);
-    const ch = noise.getChannelData(0);
-    // Fixed LCG noise: deterministic and cheap, no Math.random needed.
-    let x = 0x1234567;
-    for (let i = 0; i < ch.length; i++) {
-      x = (Math.imul(x, 1103515245) + 12345) >>> 0;
-      ch[i] = (x / 0xffffffff) * 2 - 1;
-    }
+    noise = noiseBuffer();
   }
-  if (ac.state !== 'running') void ac.resume();
-  // A silent blip inside the gesture is what finally unlocks iOS Safari.
-  const o = ac.createOscillator();
-  const g = ac.createGain();
-  g.gain.value = 0;
-  o.connect(g).connect(ac.destination);
-  o.start();
-  o.stop(ac.currentTime + 0.01);
+  unlock(); // resume + the silent blip that finally unlocks iOS Safari
 }
 
 /** perf ms -> AudioContext seconds. */

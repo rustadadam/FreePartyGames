@@ -1,7 +1,14 @@
 // Countdown to a server-time deadline. Uses the room's server clock, so every
-// device shows the same number regardless of its own clock.
+// device shows the same number regardless of its own clock. On the room's audio device it ticks
+// through the last seconds (climbing in pitch) and buzzes at zero.
 import { useEffect, useRef } from 'preact/hooks';
-import { useServerNow } from './hooks';
+import { sfx } from '../audio/sfx';
+import { useServerClock, useServerNow } from './hooks';
+
+/** Ticks start at this many seconds left (or at `urgentAt`, if that is sooner). */
+const TICK_FROM = 5;
+/** A deadline that changes closer than this to zero ran out (the server moved on at the deadline). */
+const ENDED_EARLY_MS = 400;
 
 export interface TimerProps {
   /** Deadline in server ms (e.g. from ctx.timerAt(key) put in the view). Null hides the timer. */
@@ -16,13 +23,36 @@ export interface TimerProps {
   onExpire?(): void;
   /** Accessible label prefix. Default "Time left". */
   label?: string;
+  /** No ticks or buzzer: for countdowns nobody acts against (a reveal, results). */
+  quiet?: boolean;
 }
 
-export function Timer({ deadline, total, size = 'm', urgentAt = 5, onExpire, label = 'Time left' }: TimerProps) {
+export function Timer({ deadline, total, size = 'm', urgentAt = 5, onExpire, label = 'Time left', quiet }: TimerProps) {
   const now = useServerNow(deadline ? 200 : 0);
+  const clock = useServerClock();
   const fired = useRef<number | null>(null);
   const left = deadline ? Math.max(0, deadline - now) : 0;
   const secs = Math.ceil(left / 1000);
+
+  // Ticks: only for seconds this Timer watched go by (never on mount or a new deadline).
+  const heard = useRef<{ deadline: number | null | undefined; secs: number } | null>(null);
+  useEffect(() => {
+    const was = heard.current;
+    heard.current = { deadline, secs };
+    if (quiet || !deadline || !was || was.deadline !== deadline || secs >= was.secs || secs === 0) return;
+    if (secs <= Math.min(TICK_FROM, urgentAt)) sfx.play('tick', { pitch: TICK_FROM - secs });
+  }, [deadline, secs, quiet, urgentAt]);
+
+  // The buzzer is scheduled for the deadline itself: the server moves on at that moment, often
+  // before this Timer renders a zero. It is cancelled only if the phase ends early.
+  useEffect(() => {
+    const ms = deadline ? deadline - clock.now() : 0;
+    if (quiet || !deadline || ms <= 0) return;
+    const t = setTimeout(() => sfx.play('timeUp'), ms);
+    return () => {
+      if (clock.now() < deadline - ENDED_EARLY_MS) clearTimeout(t);
+    };
+  }, [deadline, quiet, clock]);
 
   useEffect(() => {
     if (deadline && left === 0 && fired.current !== deadline) {

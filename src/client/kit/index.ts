@@ -11,5 +11,19 @@ export { QR, type QRProps } from './QR';
 export { RulesSheet, type RulesSheetProps } from './RulesSheet';
 export { PlayerChip, playerOf, type PlayerChipProps } from './PlayerChip';
 export { useServerClock, useServerNow, useAssets, useAsset, useEphemeral } from './hooks';
+// Sound effects: games trigger cues through these, never Web Audio directly (docs/DESIGN.md, Sound).
+export {
+  sfx,
+  defineSfx,
+  pentatonic,
+  useSfxCount,
+  useSfxCue,
+  useSfxHold,
+  type PlayOpts,
+  type Recipe,
+  type SfxName,
+  type Sound,
+  type Voice,
+} from '../audio/sfx';
 export type { ServerClock } from '../net/clock';
 export * from '../../shared/strokes';

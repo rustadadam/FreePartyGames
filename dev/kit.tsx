@@ -22,6 +22,19 @@ import {
   type Stroke,
 } from '../src/client/kit';
 import type { Lobby } from '../src/shared/types';
+import { KIT } from '../src/client/audio/recipes';
+import { sfx, type SfxName } from '../src/client/audio/sfx';
+import { play as caveRave } from '../src/games/cave-rave/sfx';
+import { play as comicStripClub } from '../src/games/comic-strip-club/sfx';
+import { play as crackedCookbook } from '../src/games/cracked-cookbook/sfx';
+import { play as forgery } from '../src/games/forgery/sfx';
+import { play as secondWitness } from '../src/games/second-witness/sfx';
+import { play as wikiWhat } from '../src/games/wiki-what/sfx';
+
+// The sound board plays here as if this page were the room's audio device.
+sfx.setDevice(true);
+const SFX_NAMES = Object.keys(KIT) as SfxName[];
+const GAME_SFX = { forgery, comicStripClub, crackedCookbook, wikiWhat, secondWitness, caveRave };
 
 const players = [
   { id: 'a', name: 'Maya', color: '#ff5d5d' },
@@ -93,6 +106,26 @@ function Preview() {
           value={vote}
           onVote={setVote}
         />
+      </section>
+      <section class="g-stack">
+        <span class="eyebrow">Sounds (tap any; shared, then each game's)</span>
+        <div class="g-row">
+          {SFX_NAMES.map((n) => (
+            <button key={n} type="button" class="btn btn-s" onClick={() => setTimeout(() => sfx.play(n, { n: 4 }), 30)}>
+              {n}
+            </button>
+          ))}
+        </div>
+        {Object.entries(GAME_SFX).map(([game, play]) => (
+          <div key={game} class="g-row">
+            <span class="eyebrow">{game}</span>
+            {play.names.map((n) => (
+              <button key={n} type="button" class="btn btn-s" onClick={() => setTimeout(() => (play as (n: string, o?: object) => void)(n, { n: 4, through: true }), 30)}>
+                {n}
+              </button>
+            ))}
+          </div>
+        ))}
       </section>
       <section class="g-stack">
         <span class="eyebrow">RevealStage (interval 700 ms) · QR</span>

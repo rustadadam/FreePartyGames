@@ -181,15 +181,18 @@ a seat color; `initialOf(name)`.
 **`<PlayerChip lobby id trailing? size? you? />`**: inline avatar + name for an id from a
 view. `trailing` renders right-aligned (a score). `playerOf(lobby, id)` returns the `LobbyPlayer`.
 
-**`<Timer deadline total? size? urgentAt? onExpire? label? />`**: a countdown to a
+**`<Timer deadline total? size? urgentAt? onExpire? label? quiet? />`**: a countdown to a
 **server-time** deadline using the room's clock offset, so every device agrees. `total` (ms)
 draws the ring; `urgentAt` (default 5 s) turns it marquee yellow; `onExpire` fires once
-locally (the server stays the authority). `deadline` null hides it.
+locally (the server stays the authority). `deadline` null hides it. It ticks through the last
+5 s and buzzes at zero (see **Sound**); pass `quiet` on countdowns nobody acts against (a reveal,
+a results pause), so the room only hears the clock when it matters.
 
-**`<PromptCard eyebrow? secret? hidden? size? tone? footer?>children</PromptCard>`**: the card
+**`<PromptCard eyebrow? secret? hidden? size? tone? footer? quiet?>children</PromptCard>`**: the card
 a prompt, category or word sits on (display face, punched corner). `secret` adds a Hide/Show
 toggle against shoulder-surfing (`hidden` starts it hidden). `tone="accent"` fills it with the
-game accent. `size="l"` for screen prompts. `footer` is a mono footnote line (citations).
+game accent. `size="l"` for screen prompts. `footer` is a mono footnote line (citations). It flicks
+(`card`) when it appears, unless `quiet`.
 
 **`<RulesSheet story how scoring? note? />`**: the body of every game's `Rules`. `story` is one
 scene-setting paragraph in the storyteller's voice; `how` is the steps of play, in order; `scoring`
@@ -201,7 +204,7 @@ and tagline above it, so the tagline is the one-line description and the story n
 pick survives reconnects. It locks after a pick unless `changeable`. `layout="grid"` gives two
 columns for `media` (drawings). `counts` (`id -> n`) shows tallies after the reveal.
 
-**`<RevealStage items step? startAt? interval? layout? onDone? />`**: step-through reveal
+**`<RevealStage items step? startAt? interval? layout? onDone? sound? />`**: step-through reveal
 with the shared pop motion. Three drivers:
 1. `step` (controlled): the game puts the index in its view; all devices follow.
 2. `startAt` (server ms) + `interval` (ms): each device computes the step from the server
@@ -209,6 +212,9 @@ with the shared pop motion. Three drivers:
 3. `interval` alone: local auto-advance from mount.
 
 `layout`: `stack` (accumulate), `row` (side by side, comic panels), or `single` (the current item only).
+`sound`: the cue per new step (see **Sound**). Default `reveal`, or `count` when steps are under
+400 ms apart (a list popping in). Pass a shared name, `(step) => play('mine')` for your own, or
+`false`.
 
 **`<DrawingCanvas strokes? onChange? onStroke? onStrokeProgress? aspect? colors? widths? maxStrokes? singleStroke? disabled? underlay? paper? tools? label?>overlay</DrawingCanvas>`**:
 vector drawing input.
@@ -245,6 +251,88 @@ Exports `DEFAULT_COLORS` and `DEFAULT_WIDTHS`.
 | `useAssets(ids)` | The page-wide asset map. Missing ids are requested once (batched, shared across games and rooms, since ids are content hashes) and appear when they arrive. The `assets` prop that `Player` and `Screen` receive is the same map. |
 | `useAsset<T>(id)` | One asset, or `undefined` while loading. |
 | `useEphemeral(handler)` | Subscribes to `ephemeral` messages (live, unstored traffic) while mounted. |
+
+### Sound
+
+Sound works the way a game show's does: short, punchy, cartoony cues that mark a *moment*
+(someone joined, time is up, the forger is caught), never a constant bed of noise. Every effect
+is synthesized at play time with Web Audio (oscillators, filtered noise, envelopes): no audio
+files, no samples, nothing to download. Repeats get a little random pitch so they don't grate.
+
+**One device plays.** The TV plays the room's music and effects, or the host's phone when no TV
+is connected. Every other phone stays silent: `sfx.play` there does nothing, so call it freely
+from `Player` and `Screen`. Audio starts after the first tap anywhere (browser rule). A TV that
+rejoins mid-game in Safari stays silent until someone taps it.
+
+**Settings.** A Settings card with **Music** and **Sound effects** switches appears only in
+the lobby, and only on the audio device: pinned top-right on the TV, at the end of the lobby on
+the host's phone. Both are on by default and saved on that device (`fpg:music`, `fpg:sfx`), so
+choices made in the lobby carry into games.
+
+**Ducking.** Music and effects share one `AudioContext` (`src/client/audio/engine.ts`). A big
+stinger (`start`, `fanfare`, a game's verdict sting) drops the music to 30% for the length of the
+sting, then brings it back over half a second.
+
+**Shared cues** (`sfx.play(name)`; the shell and kit already fire the ones marked *auto*):
+
+| Name | Fires | Sound |
+|---|---|---|
+| `join` | *auto*: a player joins | Bubble pop, pitched by seat so a wave of joins plays a tune |
+| `leave` | *auto*: a player leaves | Soft falling blip |
+| `pick` | *auto*: the host picks a game | Two-step click, up |
+| `start` | *auto*: a game starts | Rising whoosh into a major stab (ducks) |
+| `fanfare` | *auto*: results | Three-note run into a held chord (ducks) |
+| `back` | *auto*: back to the lobby | Two-note settle, down |
+| `tick` / `timeUp` | *auto*: `Timer`, last 5 s / zero | Woodblock tick, climbing / cartoon buzzer |
+| `reveal` | *auto*: each `RevealStage` step | Whoosh into a low thump |
+| `count` | *auto*: fast `RevealStage` staggers | Coin tick climbing the scale |
+| `card` | *auto*: a `PromptCard` appears | Papery flick |
+| `lockIn` | `useSfxCount(n)` | Soft glassy tick: someone answered, voted, locked in |
+| `score` | points land | Three quick rising dings |
+
+**API** (all from the kit):
+
+```ts
+import { sfx, defineSfx, useSfxCount, useSfxCue, useSfxHold } from '../../client/kit';
+
+useSfxCount(view.voted.length);                     // lockIn tick, climbing, each time it goes up
+useSfxCue(view.phase, (p) => p === 'tally' && play('rimshot')); // on change, never on mount
+useSfxHold(view.phase === 'play');                  // silence effects while true (Cave Rave songs)
+sfx.play('score', { delay: 1700 });                 // options: pitch (semitones), delay (ms), vol, n
+```
+
+Derive cues from the view on the client (a count that went up, a phase that changed). Game logic
+never knows about sound. Call the hooks at the top of both `Player` and `Screen`, so the cue
+plays whichever one the audio device is showing.
+
+**A game's own cues.** Put them in the game's folder (`src/games/<id>/sfx.ts`), so the synth
+code ships in the game's chunk:
+
+```ts
+import { defineSfx } from '../../client/kit';
+export const play = defineSfx({
+  caught: { duck: 1.2, vary: 0, play(v) { v.tone({ f: 660, to: 990, dur: 0.3, type: 'triangle' }); } },
+});
+// play('caught') is typed: a misspelt name doesn't compile.
+```
+
+A recipe's `play(v)` calls `v.tone({ f, to?, type?, at?, dur, vol?, attack?, lp?, wobble? })`
+and `v.noise({ at?, dur, vol?, filter?, freq?, to?, q? })`; `v.n` is the `n` option (a count).
+Recipe options: `duck` (seconds), `vary` (random ± semitones, default 0.4), `gap` (skip a repeat
+within this many ms, default 60). Keep effects under a second and quieter than you think: they
+sit just under the music. Audition everything on `/dev/kit.html` (Sounds).
+
+| Game | Signature cues |
+|---|---|
+| Forgery | `busted` (gallery alarm when the vote lands), `stamp` (the FORGED seal), `caught` / `escaped` (last reveal step) |
+| Comic Strip Club | `flip` (each panel in the reveal), `rimshot` (the tally) |
+| Cracked Cookbook | `serve` (service bell: a dish submitted, each dish revealed), `sticker` (a prop placed) |
+| Wiki-what | `right` / `wrong` (the answer), `mole` (the Mole unmasked) |
+| Second Witness | `clink` (an unmatched plate), `witness` (a chime with one note per witness) |
+| Cave Rave | `advance` (the bracket moves on), `sabotage` (TV only, during the song) |
+
+Cave Rave's phones make the music, so every effect is held during the song; only the TV's
+soft-attack `sabotage` cue plays through (`{ through: true }`), shaped so it never reads as a beat.
 
 ### Stroke format (`src/shared/strokes.ts`, `src/shared/strokeSchema.ts`)
 

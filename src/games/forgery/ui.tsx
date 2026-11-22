@@ -3,7 +3,7 @@
 // With no screen the phone shows all of that itself. Everything comes from the kit.
 import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
-import { Avatar, DrawingCanvas, PlayerChip, PromptCard, RevealStage, RulesSheet, StrokeView, Timer, Vote, playerOf, useAssets, useEphemeral } from '../../client/kit';
+import { Avatar, DrawingCanvas, PlayerChip, PromptCard, RevealStage, RulesSheet, StrokeView, Timer, Vote, playerOf, sfx, useAssets, useEphemeral, useSfxCount, useSfxCue } from '../../client/kit';
 import type { Drawing, Stroke } from '../../client/kit';
 import type { ClientGameModule, PlayerProps, ScreenProps } from '../../client/gameModule';
 import type { Lobby } from '../../shared/types';
@@ -11,6 +11,7 @@ import type { Lobby } from '../../shared/types';
 import type { ForgeryAction, ForgeryView } from './logic';
 import { GUESS_WORDS, normalizeGuess, suggestWords } from './words';
 import { ASPECT, GUESS_MS, LAPS, POINTS, REVEAL_MS, REVEAL_STEP_MS, STROKE_W, TURN_MS, VOTE_MS } from './rules';
+import { play } from './sfx';
 import './ui.css';
 
 type V = ForgeryView;
@@ -86,6 +87,13 @@ function MyStroke({ view, lobby, me, send }: { view: V; lobby: Lobby; me: string
 }
 
 // ---------- shared pieces ----------
+
+/** Sound (room audio device only): a tick per line drawn and per vote, the alarm when caught. */
+function useForgeryCues(view: V) {
+  useSfxCount(view.turn);
+  useSfxCount(view.voted.length);
+  useSfxCue(view.phase, (p) => p === 'guess' && play('busted'));
+}
 
 function phaseTiming(view: V): number {
   return view.phase === 'draw' ? TURN_MS : view.phase === 'vote' ? VOTE_MS : view.phase === 'guess' ? GUESS_MS : REVEAL_MS;
@@ -231,7 +239,14 @@ function RevealPanel({ view, lobby, me, big }: { view: V; lobby: Lobby; me?: str
       <Scoreboard view={view} lobby={lobby} me={me} size={big ? '4.4vh' : undefined} />
     </div>,
   );
-  return <RevealStage class="fg-reveal" items={items} startAt={startAt} interval={REVEAL_STEP_MS} layout="stack" />;
+  // The seal stamps on the forger; the last step stings with how the round went.
+  const forgerAt = r.outcome === 'void' ? 0 : 1;
+  const sound = (i: number) => {
+    if (i === forgerAt) play('stamp');
+    else if (i === items.length - 1 && r.outcome !== 'void') play(r.outcome === 'caught' ? 'caught' : 'escaped');
+    else sfx.play('reveal');
+  };
+  return <RevealStage class="fg-reveal" items={items} startAt={startAt} interval={REVEAL_STEP_MS} layout="stack" sound={sound} />;
 }
 
 // ---------- phone ----------
@@ -318,6 +333,7 @@ function GuessBox({ onGuess }: { onGuess(word: string): void }) {
 }
 
 function Player({ view, send, me, lobby }: PlayerProps<V, ForgeryAction>) {
+  useForgeryCues(view);
   const seated = view.players.includes(me);
   const others = view.players.filter((id) => id !== me && !view.gone.includes(id));
   const isForger = view.you?.role === 'forger';
@@ -387,6 +403,7 @@ function Player({ view, send, me, lobby }: PlayerProps<V, ForgeryAction>) {
 // ---------- screen ----------
 
 function Screen({ view, lobby }: ScreenProps<V>) {
+  useForgeryCues(view);
   let rail: ComponentChildren;
   if (view.phase === 'draw') {
     rail = (

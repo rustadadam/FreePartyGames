@@ -3,9 +3,14 @@
 //  - `startAt` + `interval`: a server-time start; each device computes the step from the
 //    server clock, so the screen and every phone stay in sync with no extra messages.
 //  - `interval` alone: local auto-advance from mount (single-device previews).
+// Each new step plays a cue on the room's audio device (see `sound`).
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { pentatonic, playSound, type Sound } from '../audio/sfx';
 import { useServerClock } from './hooks';
+
+/** Steps closer together than this are a stagger (a list popping in), not separate reveals. */
+const STAGGER_MS = 400;
 
 export interface RevealStageProps {
   /** The items, in reveal order. */
@@ -21,6 +26,12 @@ export interface RevealStageProps {
   layout?: 'stack' | 'row' | 'single';
   /** Called once when the last item has appeared. */
   onDone?(): void;
+  /**
+   * The cue for each new step: a shared effect name, or `(step) => ...` to play a game's own
+   * (per step, e.g. a different sting for the last one). `false` is silent. Default: 'reveal'
+   * (whoosh + thump), or for fast staggers 'count' (a coin tick climbing with the step).
+   */
+  sound?: Sound | false;
   class?: string;
 }
 
@@ -44,10 +55,27 @@ function useAutoStep(startAt: number | undefined, interval: number | undefined, 
   return step;
 }
 
-export function RevealStage({ items, step, startAt, interval, layout = 'stack', onDone, class: cls }: RevealStageProps) {
+export function RevealStage({ items, step, startAt, interval, layout = 'stack', onDone, sound, class: cls }: RevealStageProps) {
   const auto = useAutoStep(startAt, interval, items.length, step === undefined);
   const current = Math.min(items.length - 1, step ?? auto);
   const done = useRef(false);
+  const clock = useServerClock();
+
+  // A step is heard when it appears while mounted. On mount, only if it appeared just now
+  // (a reveal starting), not when a late joiner lands mid-reveal.
+  const heard = useRef<number | null>(null);
+  useEffect(() => {
+    const was = heard.current;
+    heard.current = current;
+    if (current < 0 || sound === false) return;
+    if (was === null) {
+      if (step !== undefined || !interval) return;
+      const shownAt = (startAt ?? clock.now()) + current * interval;
+      if (current > 0 || clock.now() - shownAt > 300) return;
+    } else if (current <= was) return;
+    const fast = interval !== undefined && interval < STAGGER_MS;
+    playSound(sound ?? (fast ? 'count' : 'reveal'), current, fast ? { pitch: pentatonic(Math.min(current, 9)) } : undefined);
+  }, [current]);
   useEffect(() => {
     if (!done.current && items.length && current >= items.length - 1) {
       done.current = true;

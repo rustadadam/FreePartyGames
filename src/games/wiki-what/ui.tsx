@@ -1,14 +1,25 @@
 // Wiki-what UI. Motif: the footnote. Choices carry superscript markers, sources are cited in mono
 // under a hairline, and the Mole is marked with a "citation needed" bracket.
-import { Avatar, PlayerChip, PromptCard, RevealStage, RulesSheet, Timer, Vote, playerOf } from '../../client/kit';
+import { Avatar, PlayerChip, PromptCard, RevealStage, RulesSheet, Timer, Vote, playerOf, sfx, useSfxCount, useSfxCue } from '../../client/kit';
 import type { ClientGameModule, PlayerProps, ScreenProps } from '../../client/gameModule';
 import type { Lobby } from '../../shared/types';
 // Type-only imports from logic.ts: a value import would pull zod and the game logic into this chunk.
 import type { WikiAction, WikiView } from './logic';
+import { play } from './sfx';
 import './ui.css';
 
 const MARKS = ['[1]', '[2]', '[3]', '[4]'];
 const TOTAL_MS = { ask: 25_000, accuse: 25_000, reveal: 8_000, moleReveal: 10_000 } as const;
+
+/** Sound (room audio device only): a tick per answer or accusation; the Mole sting, then points. */
+function useWikiCues(view: WikiView) {
+  useSfxCount(view.voted.length);
+  useSfxCue(view.phase, (p) => {
+    if (p !== 'moleReveal') return;
+    play('mole');
+    sfx.play('score', { delay: 1700 });
+  });
+}
 
 function Header({ view, big }: { view: WikiView; big?: boolean }) {
   const live = view.phase !== 'done';
@@ -22,7 +33,13 @@ function Header({ view, big }: { view: WikiView; big?: boolean }) {
         Team <b>{view.team}</b>
       </span>
       {live && view.phase !== 'moleReveal' && (
-        <Timer deadline={view.deadline} total={TOTAL_MS[view.phase as keyof typeof TOTAL_MS]} size={big ? 'l' : 'm'} urgentAt={5} />
+        <Timer
+          deadline={view.deadline}
+          total={TOTAL_MS[view.phase as keyof typeof TOTAL_MS]}
+          size={big ? 'l' : 'm'}
+          urgentAt={5}
+          quiet={view.phase === 'reveal'}
+        />
       )}
     </div>
   );
@@ -93,7 +110,12 @@ function Verdict({ view, lobby, size }: { view: WikiView; lobby: Lobby; size?: '
   const voters = (i: number) => view.players.filter((p) => r.picks[p] === i);
   return (
     <div class={`ww-reveal${size ? ' is-l' : ''}`}>
-      <RevealStage key={`${view.round}-${view.qi}`} items={items} interval={1300} />
+      <RevealStage
+        key={`${view.round}-${view.qi}`}
+        items={items}
+        interval={1300}
+        sound={(i) => (i === 1 ? play(r.right ? 'right' : 'wrong') : sfx.play('reveal'))}
+      />
       <ul class="ww-votes">
         {view.q!.choices.map((c, i) =>
           voters(i).length ? (
@@ -125,6 +147,7 @@ function Standings({ view, lobby, me, size }: { view: WikiView; lobby: Lobby; me
         <PlayerChip key={id} lobby={lobby} id={id} you={id === me} trailing={sc[id]} size={size} />
       ))}
       interval={120}
+      sound={false}
     />
   );
 }
@@ -154,6 +177,7 @@ function MoleReveal({ view, lobby, me, big }: { view: WikiView; lobby: Lobby; me
 }
 
 function Player({ view, send, lobby, me }: PlayerProps<WikiView, WikiAction>) {
+  useWikiCues(view);
   const you = view.you;
   const mole = !!you?.mole;
   const room = lobby.screenConnected;
@@ -238,6 +262,7 @@ function Player({ view, send, lobby, me }: PlayerProps<WikiView, WikiAction>) {
 }
 
 function Screen({ view, lobby }: ScreenProps<WikiView>) {
+  useWikiCues(view);
   const q = view.q;
   return (
     <section class="g-stack ww-screen">

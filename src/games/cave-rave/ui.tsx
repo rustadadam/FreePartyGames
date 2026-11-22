@@ -1,7 +1,7 @@
 // Cave Rave UI. Phones run the song and judge locally (highway.tsx); the server only sees one
 // score per duel. The screen shows the bracket, a live score race and the sabotage feed.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Avatar, PlayerChip, RulesSheet, Timer, playerOf, useEphemeral, useServerNow } from '../../client/kit';
+import { Avatar, PlayerChip, RulesSheet, Timer, playerOf, useEphemeral, useServerNow, useSfxCount, useSfxCue, useSfxHold } from '../../client/kit';
 import type { ClientGameModule, PlayerProps, ScreenProps } from '../../client/gameModule';
 import type { Lobby } from '../../shared/types';
 import { audioState, click, ctxToPerf, loadOffset, medianOffset, perfToCtx, saveOffset, unlockAudio } from './audio';
@@ -10,6 +10,7 @@ import { Highway, runFor } from './highway';
 import { EFFECTS, EFFECT_MS, READY_FIRST_MS, READY_MS, SAB_COOLDOWN_MS, type CRView, type DuelView, type Effect, type LivePayload, type SabEvent } from './rules';
 // Type-only import from logic.ts keeps zod out of this chunk.
 import type { CRAction } from './logic';
+import { play } from './sfx';
 import './ui.css';
 
 const fmt = (n: number) => n.toLocaleString('en-US');
@@ -40,6 +41,16 @@ function useLiveScores(round: number): Record<string, number> {
 }
 
 // ---------- shared pieces ----------
+
+/**
+ * Sound on the room's audio device. During the song every effect is held, so nothing ever
+ * plays over a phone's beat; only the TV's sabotage cue (Screen) cuts through.
+ */
+function useCaveCues(view: CRView) {
+  useSfxHold(view.phase === 'play');
+  useSfxCount(view.ready.length);
+  useSfxCue(view.phase, (p) => p === 'reveal' && play('advance'));
+}
 
 /** The cave's ceiling: an irregular stalactite edge with an ultraviolet glow. */
 function Stalactites() {
@@ -303,6 +314,7 @@ function PlayRun({ view, send, lobby, offset }: { view: CRView; send(a: CRAction
 }
 
 function Player({ view, send, lobby, me }: PlayerProps<CRView, CRAction>) {
+  useCaveCues(view);
   const [offset, setOffset] = useState<number | null>(() => loadOffset());
   const [calibrating, setCalibrating] = useState(false);
   // The song starting cancels a calibration in progress.
@@ -400,7 +412,7 @@ function Player({ view, send, lobby, me }: PlayerProps<CRView, CRAction>) {
         ) : (
           <p class="g-title">Round {view.round} results</p>
         )}
-        <Timer deadline={view.deadline} />
+        <Timer deadline={view.deadline} quiet />
         <Duels view={view} lobby={lobby} me={me} />
       </section>
     );
@@ -455,6 +467,9 @@ function SongProgress({ view, now }: { view: CRView; now: number }) {
 }
 
 function Screen({ view, lobby }: ScreenProps<CRView>) {
+  useCaveCues(view);
+  const last = view.feed[view.feed.length - 1];
+  useSfxCue(last ? `${last.by}${last.at}` : null, () => play('sabotage', { through: true }));
   const now = useServerNow(100);
   const live = useLiveScores(view.round);
   const chart = useChart(view);
@@ -475,7 +490,7 @@ function Screen({ view, lobby }: ScreenProps<CRView>) {
         <p key={call} class="g-call cr-screen-call">
           {call}
         </p>
-        <Timer deadline={view.deadline} size="l" />
+        <Timer deadline={view.deadline} size="l" quiet={view.phase !== 'ready'} />
       </header>
       <SongProgress view={view} now={now} />
       <div class="cr-screen-body">
