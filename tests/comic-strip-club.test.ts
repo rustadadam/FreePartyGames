@@ -40,7 +40,7 @@ const scribble = [{ c: '#14101f', w: 6, p: [10, 10, 200, 200] }];
 /** Plays a whole game by hand up to the vote, every player submitting a distinct drawing. */
 function playToVote(n: number) {
   const f = fakeCtx();
-  const s = game.setup(f.ctx, roster(n), {});
+  const s = game.setup(f.ctx, roster(n), game.defaultSettings);
   f.setState(s);
   ids(n).forEach((p, i) => game.onAction(s, f.ctx, p, { type: 'prompt', text: `premise ${i}` }));
   for (let panel = 1; panel <= 3; panel++) {

@@ -19,11 +19,13 @@ import { defineGame, type GameCtx } from '../../core/game';
 import { makeDrawing } from '../../shared/strokes';
 import { StrokesSchema } from '../../shared/strokeSchema';
 import type { Rng } from '../../core/rng';
+import type { SettingField } from '../../shared/types';
 import { PREMISES } from './content';
 
 import { MAX_PROMPT_CHARS, PANEL_ASPECT, PANELS } from './constants';
 export { MAX_PROMPT_CHARS, PANEL_ASPECT, PANELS };
 
+/** Default lengths of the premise and panel rounds (the host can change them). */
 export const PROMPT_MS = 60_000;
 export const DRAW_MS = 75_000;
 /** The server waits this long past the shown deadline so phones can auto-submit what they drew. */
@@ -69,7 +71,22 @@ export interface Remix {
   panels: Panel[];
 }
 
+export interface CscSettings {
+  /** Seconds to write a premise. */
+  promptSeconds: number;
+  /** Seconds to draw a panel. */
+  drawSeconds: number;
+}
+
+const settingsFields: SettingField[] = [
+  { key: 'promptSeconds', label: 'Premise time', hint: 'To write the comic idea', min: 20, max: 120, step: 10, unit: 's' },
+  { key: 'drawSeconds', label: 'Drawing time', hint: 'Per panel', min: 30, max: 150, step: 15, unit: 's' },
+];
+
 export interface CscState {
+  /** Length of the premise round and of each panel round, in ms. */
+  promptMs: number;
+  drawMs: number;
   playerIds: string[];
   names: Record<string, string>;
   gone: string[];
@@ -122,6 +139,9 @@ export interface CscView {
   phase: Phase;
   round: number;
   deadline: number | null;
+  /** Length of the premise round and of each panel round, for the timer ring. */
+  promptMs: number;
+  drawMs: number;
   players: string[];
   /** Players who have submitted this round. */
   done: string[];
@@ -149,7 +169,7 @@ const submittedAll = (s: CscState) => present(s).every((p) => p in s.inbox);
 function startRound(s: CscState, ctx: GameCtx): void {
   s.phase = s.round === 0 ? 'prompt' : 'draw';
   s.inbox = {};
-  const ms = s.round === 0 ? PROMPT_MS : DRAW_MS;
+  const ms = s.round === 0 ? s.promptMs : s.drawMs;
   s.deadline = ctx.now() + ms;
   // Everyone gone: don't sit out the clock.
   ctx.setTimer('round', present(s).length === 0 ? 500 : ms + GRACE_MS);
@@ -257,7 +277,7 @@ function sourceFor(s: CscState, player: string): Source | null {
 
 // ---------- the game ----------
 
-export default defineGame<CscState, CscAction, Record<string, never>>({
+export default defineGame<CscState, CscAction, CscSettings>({
   manifest: {
     id: 'comic-strip-club',
     title: 'Comic Strip Club',
@@ -267,11 +287,14 @@ export default defineGame<CscState, CscAction, Record<string, never>>({
     screen: 'optional',
     estMinutes: 15,
   },
-  defaultSettings: {},
+  defaultSettings: { promptSeconds: PROMPT_MS / 1000, drawSeconds: DRAW_MS / 1000 },
+  settingsFields,
   actionSchema,
 
-  setup(ctx, players) {
+  setup(ctx, players, settings) {
     const s: CscState = {
+      promptMs: settings.promptSeconds * 1000,
+      drawMs: settings.drawSeconds * 1000,
       playerIds: players.map((p) => p.id),
       names: Object.fromEntries(players.map((p) => [p.id, p.name])),
       gone: [],
@@ -346,6 +369,8 @@ export default defineGame<CscState, CscAction, Record<string, never>>({
       phase: s.phase,
       round: s.round,
       deadline: s.deadline,
+      promptMs: s.promptMs,
+      drawMs: s.drawMs,
       players: s.playerIds,
       done: s.phase === 'prompt' || s.phase === 'draw' ? Object.keys(s.inbox) : [],
       gone: s.gone,

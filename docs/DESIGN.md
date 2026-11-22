@@ -328,7 +328,7 @@ sit just under the music. Audition everything on `/dev/kit.html` (Sounds).
 | Comic Strip Club | `flip` (each panel in the reveal), `rimshot` (the tally) |
 | Cracked Cookbook | `serve` (service bell: a dish submitted, each dish revealed), `sticker` (a prop placed) |
 | Wiki-what | `right` / `wrong` (the answer), `mole` (the Mole unmasked) |
-| Second Witness | `clink` (an unmatched plate), `witness` (a chime with one note per witness) |
+| Second Witness | `error` (a word nobody matched), `witness` (a chime with one note per witness) |
 | Cave Rave | `advance` (the bracket moves on), `sabotage` (TV only, during the song) |
 
 Cave Rave's phones make the music, so every effect is held during the song; only the TV's

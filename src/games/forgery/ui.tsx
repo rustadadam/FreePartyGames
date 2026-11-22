@@ -10,7 +10,7 @@ import type { Lobby } from '../../shared/types';
 // Type-only import from logic.ts: a value import would pull zod and the game logic into this chunk.
 import type { ForgeryAction, ForgeryView } from './logic';
 import { GUESS_WORDS, normalizeGuess, suggestWords } from './words';
-import { ASPECT, GUESS_MS, LAPS, POINTS, REVEAL_MS, REVEAL_STEP_MS, STROKE_W, TURN_MS, VOTE_MS } from './rules';
+import { ASPECT, GUESS_MS, LAPS, POINTS, REVEAL_MS, REVEAL_STEP_MS, STROKE_W, VOTE_MS } from './rules';
 import { play } from './sfx';
 import './ui.css';
 
@@ -96,7 +96,7 @@ function useForgeryCues(view: V) {
 }
 
 function phaseTiming(view: V): number {
-  return view.phase === 'draw' ? TURN_MS : view.phase === 'vote' ? VOTE_MS : view.phase === 'guess' ? GUESS_MS : REVEAL_MS;
+  return view.phase === 'draw' ? view.turnMs : view.phase === 'vote' ? VOTE_MS : view.phase === 'guess' ? GUESS_MS : REVEAL_MS;
 }
 
 function Bar({ view, size }: { view: V; size?: 'm' | 'l' }) {

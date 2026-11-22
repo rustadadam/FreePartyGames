@@ -15,6 +15,7 @@
 //  - The article title is hidden until the reveal (titles often give the answer away).
 import { z } from 'zod';
 import { defineGame, type GameCtx } from '../../core/game';
+import type { SettingField } from '../../shared/types';
 import { QUESTIONS, type Question } from './content';
 
 export const actionSchema = z.discriminatedUnion('type', [
@@ -26,10 +27,19 @@ export type WikiAction = z.infer<typeof actionSchema>;
 export interface WikiSettings {
   rounds: number;
   perRound: number;
+  /** Seconds to answer each question. */
+  askSeconds: number;
 }
+
+const settingsFields: SettingField[] = [
+  { key: 'rounds', label: 'Rounds', hint: 'One Mole per round', min: 1, max: 5, step: 1 },
+  { key: 'perRound', label: 'Questions per round', min: 1, max: 8, step: 1 },
+  { key: 'askSeconds', label: 'Answer time', hint: 'Per question', min: 10, max: 60, step: 5, unit: 's' },
+];
 
 export type Phase = 'ask' | 'reveal' | 'accuse' | 'moleReveal' | 'done';
 
+/** Default time to answer a question (the host can change it). */
 export const ASK_MS = 25_000;
 export const REVEAL_MS = 8_000;
 export const ACCUSE_MS = 25_000;
@@ -49,6 +59,8 @@ export interface WikiState {
   gone: string[];
   rounds: number;
   perRound: number;
+  /** Time to answer one question, in ms. */
+  askMs: number;
   qids: string[];
   /** 1-based; 0 before the first round starts. */
   round: number;
@@ -79,6 +91,8 @@ export interface WikiView {
   rounds: number;
   qi: number;
   perRound: number;
+  /** Time to answer one question, for the timer ring. */
+  askMs: number;
   deadline: number | null;
   players: string[];
   gone: string[];
@@ -136,7 +150,7 @@ function startQuestion(s: WikiState, ctx: GameCtx): void {
   s.order = [];
   s.teamPick = null;
   s.teamRight = false;
-  arm(s, ctx, ASK_MS);
+  arm(s, ctx, s.askMs);
 }
 
 function startRound(s: WikiState, ctx: GameCtx): void {
@@ -225,7 +239,8 @@ export default defineGame<WikiState, WikiAction, WikiSettings>({
     screen: 'optional',
     estMinutes: 12,
   },
-  defaultSettings: { rounds: 3, perRound: 4 },
+  defaultSettings: { rounds: 3, perRound: 4, askSeconds: ASK_MS / 1000 },
+  settingsFields,
   actionSchema,
 
   setup(ctx, players, settings) {
@@ -237,6 +252,7 @@ export default defineGame<WikiState, WikiAction, WikiSettings>({
       gone: [],
       rounds,
       perRound,
+      askMs: Math.round(settings.askSeconds * 1000),
       qids: ids,
       round: 0,
       qi: 0,
@@ -342,6 +358,7 @@ export default defineGame<WikiState, WikiAction, WikiSettings>({
       rounds: s.rounds,
       qi: s.qi,
       perRound: s.perRound,
+      askMs: s.askMs,
       deadline: s.deadline || null,
       players: s.playerIds,
       gone: s.gone,

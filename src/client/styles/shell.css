@@ -475,37 +475,6 @@ button.host-option:active:not(:disabled) {
   text-transform: uppercase;
   color: var(--muted);
 }
-.phone-me {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  min-height: 48px;
-  padding: 4px 10px 4px 4px;
-  border: 2px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface);
-}
-.phone-me-caret {
-  min-width: 1.5em;
-  color: var(--muted);
-  font-weight: 700;
-}
-.sheet {
-  position: sticky;
-  top: calc(var(--safe-t) + 66px);
-  z-index: 9;
-  display: grid;
-  gap: var(--s2);
-  margin: 0 calc(var(--gutter) + var(--safe-r)) 0 calc(var(--gutter) + var(--safe-l));
-  padding: var(--s4);
-  border: 2px solid var(--line);
-  border-radius: var(--r-m);
-  background: var(--surface);
-  box-shadow: 0 20px 40px -10px rgb(0 0 0 / 0.6);
-}
-.sheet-who {
-  margin-bottom: var(--s2);
-}
 .phone-body {
   flex: 1;
   display: grid;
@@ -566,14 +535,13 @@ button.host-option:active:not(:disabled) {
   --punch: 48px;
 }
 
-/* ---- Settings (lobby only, on the device that plays the room's audio) ----
-   A gear; tapping it drops the two switches down below it. */
-.settings {
-  display: grid;
-  justify-items: end;
-  gap: var(--s2);
+/* ---- Menu: the one gear on every device ----
+   Game settings (host), sound (audio device) and room actions share one panel.
+   Phone: full-width sheet under the header. TV: a card under the lobby gear, or above the footer rail. */
+.menu {
+  position: relative;
 }
-.settings-gear {
+.menu-gear {
   display: grid;
   place-items: center;
   width: var(--tap);
@@ -585,27 +553,47 @@ button.host-option:active:not(:disabled) {
   color: var(--muted);
   touch-action: manipulation;
 }
-.settings-gear svg {
+.menu-gear svg {
   width: 55%;
   height: 55%;
   transition: transform var(--d-fast) var(--ease-out);
 }
-.settings-gear[aria-expanded='true'] {
+.menu-gear[aria-expanded='true'] {
   border-color: var(--accent);
   color: var(--accent);
 }
-.settings-gear[aria-expanded='true'] svg {
+.menu-gear[aria-expanded='true'] svg {
   transform: rotate(60deg);
 }
-.settings-panel {
+.menu-panel {
+  position: absolute;
+  z-index: 9;
   display: grid;
-  width: min(100%, 340px);
-  padding: 0 var(--s4);
+  gap: var(--s4);
+  padding: var(--s4);
   border: 2px solid var(--line);
   border-radius: var(--r-m);
   background: var(--surface);
+  box-shadow: 0 20px 40px -10px rgb(0 0 0 / 0.6);
+  overflow-y: auto;
 }
-.switch-row {
+.menu-section {
+  display: grid;
+  gap: var(--s1);
+}
+.menu-actions {
+  gap: var(--s2);
+}
+.menu-section + .menu-section {
+  padding-top: var(--s4);
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+.menu-who {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+.menu-row {
   display: flex;
   align-items: center;
   gap: var(--s4);
@@ -618,14 +606,46 @@ button.host-option:active:not(:disabled) {
   text-align: left;
   touch-action: manipulation;
 }
-.switch-row + .switch-row {
-  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
-}
 .switch-label {
   flex: 1;
   display: grid;
 }
 .switch-hint {
+  color: var(--muted);
+  font-size: var(--t-s);
+  font-weight: 400;
+}
+.stepper {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.stepper-btn {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--bg);
+  font-size: 1.4em;
+  font-weight: 700;
+  line-height: 1;
+  touch-action: manipulation;
+}
+.stepper-btn:disabled {
+  opacity: 0.35;
+}
+.stepper-value {
+  min-width: 3.2em;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-align: center;
+}
+.stepper-unit {
+  margin-left: 0.15em;
   color: var(--muted);
   font-size: var(--t-s);
   font-weight: 400;
@@ -659,23 +679,52 @@ button.host-option:active:not(:disabled) {
   background: var(--accent-ink);
   transform: translate(1.2em, -50%);
 }
-/* TV: the gear sits top-right of the lobby; the panel drops down over the player wall. */
-.screen-settings {
+/* Phone: the panel is a sheet across the screen, below the header. */
+.menu-phone .menu-panel {
+  position: fixed;
+  top: calc(var(--safe-t) + 66px);
+  right: calc(var(--gutter) + var(--safe-r));
+  left: calc(var(--gutter) + var(--safe-l));
+  max-height: calc(100dvh - var(--safe-t) - 66px - var(--s4));
+}
+/* TV, lobby: the gear sits top-right and the card drops down over the player wall. */
+.menu-tv-corner {
   position: absolute;
   top: 4.5vh;
   right: 4.5vw;
   z-index: 5;
-  gap: 1.2vh;
 }
-.screen-settings .settings-gear {
-  width: 7vh;
-  height: 7vh;
-}
-.screen-settings .settings-panel {
-  width: 48vh;
-  padding-inline: 2.2vh;
+.menu-tv-corner .menu-panel,
+.menu-tv-rail .menu-panel {
+  right: 0;
+  width: 56vh;
+  padding: 2.2vh;
   border-radius: 1.6vh;
   box-shadow: 0 3vh 6vh -1vh rgb(0 0 0 / 0.6);
+}
+.menu-tv-corner .menu-panel {
+  top: calc(100% + 1.2vh);
+  max-height: 80vh;
+}
+/* Phone: a header-sized gear. */
+.menu-phone .menu-gear {
+  width: 48px;
+  height: 48px;
+}
+/* TV, in a game: the gear ends the footer rail and the card opens upward. */
+.menu-tv-rail {
+  margin-left: auto;
+}
+.rail-host + .menu-tv-rail {
+  margin-left: 0;
+}
+.menu-tv-rail .menu-gear {
+  width: 6vh;
+  height: 6vh;
+}
+.menu-tv-rail .menu-panel {
+  bottom: calc(100% + 2vh);
+  max-height: 80vh;
 }
 
 /* =========================================================

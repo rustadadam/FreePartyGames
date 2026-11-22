@@ -1,5 +1,4 @@
 // A phone in the room: portrait, one-handed. Header stub, content, docked action.
-import { useState } from 'preact/hooks';
 import type { Lobby } from '../../shared/types';
 import { Avatar } from '../kit/Avatar';
 import type { RoomClient } from '../net/room';
@@ -7,11 +6,10 @@ import { ConfirmButton } from './ConfirmButton';
 import { GameStage } from './GameStage';
 import { AddBots, GamePicker, hostName, PlayerWall, SelectedGame, StartButton } from './Lobby';
 import { Results } from './Results';
-import { SoundSettings } from './SoundSettings';
+import { RoomMenu } from './RoomMenu';
 import { ShareButton, Ticket, TicketStub } from './Ticket';
 
 export function PlayerView({ client, lobby, view, meId }: { client: RoomClient; lobby: Lobby; view: unknown; meId: string }) {
-  const [menu, setMenu] = useState(false);
   const isHost = client.isHost;
   const me = lobby.players.find((p) => p.id === meId);
   const game = lobby.games.find((g) => g.id === lobby.currentGameId);
@@ -23,37 +21,41 @@ export function PlayerView({ client, lobby, view, meId }: { client: RoomClient; 
       <header class="phone-head">
         <TicketStub code={lobby.code} />
         <span class="phone-head-title">{playing || lobby.phase === 'results' ? (game?.title ?? '') : 'Lobby'}</span>
-        <button type="button" class="phone-me" aria-expanded={menu} aria-label="Room menu" onClick={() => setMenu(!menu)}>
-          {me && <Avatar name={me.name} color={me.color} size="36px" host={me.isHost} />}
-          <span class="phone-me-caret" aria-hidden="true">
-            {menu ? '×' : '•••'}
-          </span>
-        </button>
-      </header>
-
-      {menu && (
-        <div class="sheet" role="dialog" aria-label="Room menu">
-          <p class="sheet-who">
-            {me?.name ?? 'You'} in room <strong>{lobby.code}</strong>
-            {isHost && <span class="badge">Host</span>}
-          </p>
-          {isHost && playing && (
+        <RoomMenu
+          client={client}
+          lobby={lobby}
+          placement="phone"
+          head={
+            <p class="menu-who">
+              {me && <Avatar name={me.name} color={me.color} size="36px" host={me.isHost} />}
+              <span>
+                {me?.name ?? 'You'} in room <strong>{lobby.code}</strong>
+                {isHost && <span class="badge">Host</span>}
+              </span>
+            </p>
+          }
+        >
+          {(close) => (
             <>
-              <button type="button" class="btn btn-block" onClick={() => (client.host({ type: 'skip' }), setMenu(false))}>
-                Skip ahead
-              </button>
-              <ConfirmButton
-                class="btn-block"
-                label="End game for everyone"
-                confirm="Tap again to end the game"
-                onConfirm={() => (client.host({ type: 'returnToLobby' }), setMenu(false))}
-              />
+              {isHost && playing && (
+                <>
+                  <button type="button" class="btn btn-block" onClick={() => (client.host({ type: 'skip' }), close())}>
+                    Skip ahead
+                  </button>
+                  <ConfirmButton
+                    class="btn-block"
+                    label="End game for everyone"
+                    confirm="Tap again to end the game"
+                    onConfirm={() => (client.host({ type: 'returnToLobby' }), close())}
+                  />
+                </>
+              )}
+              <ShareButton code={lobby.code} class="btn-block" />
+              <ConfirmButton class="btn-block btn-ghost" label="Leave room" confirm="Tap again to leave" onConfirm={() => client.leave()} />
             </>
           )}
-          <ShareButton code={lobby.code} class="btn-block" />
-          <ConfirmButton class="btn-block btn-ghost" label="Leave room" confirm="Tap again to leave" onConfirm={() => client.leave()} />
-        </div>
-      )}
+        </RoomMenu>
+      </header>
 
       <main class="phone-body">
         {lobby.phase === 'lobby' && (
@@ -94,7 +96,6 @@ export function PlayerView({ client, lobby, view, meId }: { client: RoomClient; 
             ) : (
               <p class="waiting">Waiting for {hostName(lobby)} to pick a game.</p>
             )}
-            <SoundSettings />
           </>
         )}
 

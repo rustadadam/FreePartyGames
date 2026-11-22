@@ -2,6 +2,7 @@
 // Pure TypeScript: no DOM, no Cloudflare, no Math.random / Date.now (use ctx.rng / ctx.now).
 import { z } from 'zod';
 import { defineGame, type GameCtx } from '../../core/game';
+import type { SettingField } from '../../shared/types';
 
 export const actionSchema = z.object({ type: z.literal('tap') }).strict();
 export type TapAction = z.infer<typeof actionSchema>;
@@ -9,6 +10,9 @@ export type TapAction = z.infer<typeof actionSchema>;
 export interface TapSettings {
   rounds: number;
 }
+
+/** What the host can change in the lobby. The shell renders these; the game ships no settings UI. */
+const settingsFields: SettingField[] = [{ key: 'rounds', label: 'Rounds', hint: 'Taps are worth a point each', min: 1, max: 10, step: 1 }];
 
 type Phase = 'wait' | 'go' | 'reveal' | 'done';
 
@@ -81,6 +85,7 @@ export default defineGame<TapState, TapAction, TapSettings>({
     hidden: true,
   },
   defaultSettings: { rounds: 3 },
+  settingsFields,
   actionSchema,
 
   setup(ctx, players, settings) {

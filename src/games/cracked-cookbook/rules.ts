@@ -15,6 +15,7 @@ export const VOTE_PTS = 300;
 /** Points each prop artist earns per vote on any dish that used one of their props. */
 export const PROP_PTS = 100;
 
+/** Default drawing and cooking times (the host can change them). */
 export const DRAW_MS = 75_000;
 export const COOK_MS = 150_000;
 export const VOTE_MS = 60_000;

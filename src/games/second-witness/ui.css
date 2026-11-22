@@ -199,168 +199,128 @@
   opacity: 1;
 }
 
-/* ---- merge ---- */
-.sw-picks {
+/* ---- call: one player's words at a time ---- */
+.sw-turn {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+.sw-turn-body {
+  display: grid;
+}
+.sw-turn-body b {
+  font-family: var(--font-display);
+  font-size: var(--t-l);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.sw-words {
   display: grid;
   gap: var(--s3);
 }
-.sw-pick {
-  display: grid;
-  gap: var(--s1);
-  width: 100%;
+.sw-word {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
   min-height: var(--tap);
   padding: var(--s4) var(--s6);
-  font: inherit;
-  text-align: left;
-  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform var(--d-fast), filter var(--d-fast);
 }
-.sw-pick:not(:disabled) {
-  cursor: pointer;
+.sw-word .sw-vn {
+  color: var(--accent-ink);
+  opacity: 0.7;
 }
-.sw-pick:disabled {
-  opacity: 1;
+.sw-word-text {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: var(--t-l);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
 }
-.sw-pick.is-selected {
+.sw-word.is-live {
+  cursor: grab;
+  touch-action: none;
+}
+.sw-word.is-selected {
   outline: 3px solid var(--accent-2);
   outline-offset: 3px;
   transform: translateY(-2px);
 }
-.sw-pick-text {
-  font-family: var(--font-display);
-  font-size: var(--t-l);
-  line-height: 1.1;
-  overflow-wrap: anywhere;
+.sw-word.is-over {
+  outline: 3px dashed var(--accent-2);
+  outline-offset: 3px;
+  transform: scale(1.03);
 }
-.sw-yours {
-  position: absolute;
-  top: var(--s2);
-  right: var(--s6);
-  font-family: var(--font-mono);
-  font-size: calc(var(--t-s) * 0.8);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  opacity: 0.7;
+.sw-mine .sw-yours {
+  position: static;
 }
-.sw-props {
-  display: grid;
-  gap: var(--s3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+/* Matched: the plate turns verdigris and shows who matched it. */
+.sw-word.is-matched {
+  --accent: var(--accent-2);
 }
-.sw-prop {
-  display: grid;
-  gap: var(--s2);
-  padding: var(--s4);
-  border: 2px solid var(--line);
-  border-radius: var(--r-m);
-  background: var(--stage);
-}
-.sw-prop-q,
-.sw-prop-tally,
-.sw-voted {
-  margin: 0;
-}
-.sw-prop-q {
-  font-size: var(--t-m);
-  overflow-wrap: anywhere;
-}
-.sw-prop-q b {
-  color: var(--accent);
-}
-.sw-eq {
-  color: var(--muted);
-}
-.sw-prop-tally {
-  font-family: var(--font-mono);
-  font-size: var(--t-s);
-}
-.sw-yes {
-  color: var(--ok);
-}
-.sw-no {
-  color: var(--danger);
-}
-.sw-voted {
-  color: var(--muted);
-  font-size: var(--t-s);
-}
-.sw-vote-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s3);
-}
-
-/* ---- reveal ---- */
-.sw-rplate {
-  display: grid;
-  gap: var(--s2);
-  padding: var(--s4) var(--s6);
-}
-.sw-rhead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s3);
-}
-.sw-rtext {
-  font-family: var(--font-display);
-  font-size: var(--t-l);
-  line-height: 1.1;
-  overflow-wrap: anywhere;
-}
-.sw-marks {
+.sw-matchers {
   display: inline-flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 5px;
+  gap: 4px;
 }
-.sw-mark {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--accent-2);
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent-2) 50%, black);
+/* No match: the plate goes red and shakes, with a stamp across it. */
+.sw-word.is-error {
+  --accent: var(--danger);
+  color: #fff;
+  text-shadow: none;
 }
-.sw-mark.is-solo {
-  background: transparent;
-  box-shadow: none;
-  border: 2px dashed var(--accent-ink);
-  opacity: 0.6;
+.sw-word.is-error .sw-vn {
+  color: #fff;
 }
-.sw-who {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.sw-word.is-error .sw-word-text {
+  text-decoration: line-through;
+  text-decoration-thickness: 0.08em;
 }
-.sw-who li {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  font-size: var(--t-s);
-  font-weight: 700;
-}
-.sw-verdict {
-  margin: 0;
-  padding-top: var(--s2);
-  border-top: 1px solid color-mix(in srgb, var(--accent-ink) 35%, transparent);
+.sw-stamp {
+  padding: 2px var(--s2);
+  border: 2px solid currentColor;
+  border-radius: var(--r-s);
   font-family: var(--font-mono);
-  font-size: calc(var(--t-s) * 0.86);
+  font-size: calc(var(--t-s) * 0.9);
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  transform: rotate(-6deg);
+  white-space: nowrap;
 }
-/* A plate nobody matched is left tarnished. */
-.sw-rplate.is-solo {
-  filter: saturate(0.4) brightness(0.88);
+.sw-word.is-dead {
+  filter: saturate(0.2) brightness(0.8);
+  opacity: 0.6;
 }
-/* Newest plate on top, so it stays in view on a phone. */
-.sw-stack.k-reveal {
-  display: flex;
-  flex-direction: column-reverse;
+@media (prefers-reduced-motion: no-preference) {
+  .sw-word.is-error {
+    animation: sw-shake 0.5s both;
+  }
+  .sw-word.is-error .sw-stamp {
+    animation: k-pop var(--d-pop) var(--ease-pop) 0.25s both;
+  }
 }
+@keyframes sw-shake {
+  10%, 90% { transform: translateX(-3px); }
+  20%, 80% { transform: translateX(6px); }
+  30%, 50%, 70% { transform: translateX(-9px); }
+  40%, 60% { transform: translateX(9px); }
+}
+/* The word being dragged. */
+.sw-ghost {
+  position: fixed;
+  z-index: 50;
+  padding: var(--s3) var(--s5);
+  font-family: var(--font-display);
+  font-size: var(--t-m);
+  pointer-events: none;
+  transform: translate(-50%, -120%) rotate(-3deg);
+}
+
+/* ---- round standings ---- */
 .sw-yourpts {
   margin: 0;
   padding: var(--s3) var(--s4);
@@ -511,9 +471,6 @@
   color: var(--muted);
   text-align: center;
 }
-.sw-single {
-  width: 100%;
-}
 .sw-stage-scores {
   display: grid;
   gap: 2.4vh;
@@ -533,66 +490,33 @@
 .view-screen .sw-score-total {
   font-size: 3.4vh;
 }
-.sw-rplate.is-big {
-  width: min(100%, 130vh);
+.sw-call-screen .sw-chapter {
+  width: min(100%, 150vh);
+}
+.sw-words.is-big {
+  grid-template-columns: repeat(auto-fit, minmax(48vh, 1fr));
   gap: 2vh;
-  padding: 4vh 8vh;
+  width: min(100%, 170vh);
 }
-.sw-rplate.is-big .sw-rtext {
-  font-size: 8vh;
+.sw-word.is-big {
+  gap: 3vh;
+  padding: 4vh 6vh;
 }
-.sw-rplate.is-big .sw-who {
-  gap: 1.4vh 3vh;
+.sw-word.is-big .sw-word-text {
+  font-size: 7vh;
 }
-.sw-rplate.is-big .sw-who li {
-  font-size: 3.2vh;
-}
-.sw-rplate.is-big .sw-mark {
-  width: 3vh;
-  height: 3vh;
-}
-.sw-rplate.is-big .sw-verdict {
+.sw-word.is-big .sw-stamp {
   font-size: 2.4vh;
 }
-.sw-merge-screen {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: 4vh;
-  min-height: 0;
+.view-screen .sw-turn {
+  gap: 3vh;
 }
-.sw-merge-left {
-  display: grid;
-  align-content: start;
-  gap: 2.4vh;
-  min-height: 0;
-  overflow: auto;
+.view-screen .sw-turn-body b {
+  font-size: 5.5vh;
 }
-.sw-merge-right {
-  display: grid;
-  align-content: start;
-  gap: 2vh;
-  min-height: 0;
-  overflow: auto;
-}
-.view-screen .sw-h {
-  font-size: var(--t-xl);
-}
-.sw-picks.is-big {
-  grid-template-columns: repeat(auto-fill, minmax(30vh, 1fr));
-  gap: 1.6vh;
-}
-.sw-picks.is-big .sw-pick {
-  min-height: 0;
-  padding: 1.6vh 3vh;
-}
-.sw-picks.is-big .sw-pick-text {
-  font-size: 3.2vh;
-}
-.sw-prop.is-big {
-  padding: 2vh;
-}
-.sw-prop.is-big .sw-prop-q {
-  font-size: 3.2vh;
+.sw-call-screen .sw-stage-scores,
+.sw-call-screen .sw-scores {
+  width: 100%;
 }
 .view-screen .sw-bonus {
   grid-template-columns: repeat(auto-fit, minmax(48vh, 1fr));

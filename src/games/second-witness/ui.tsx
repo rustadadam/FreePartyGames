@@ -1,8 +1,8 @@
 // Second Witness UI. Motif: the gold plate. The prompt is a chapter heading engraved on a plate,
 // answers are numbered like verses ("3:1", "3:2"), witness counts are small marks on the plate,
 // and a temple silhouette sits quietly behind the prompt.
-import { useState } from 'preact/hooks';
-import { Avatar, PromptCard, RevealStage, RulesSheet, Timer, playerOf, useServerNow, useSfxCount } from '../../client/kit';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { Avatar, PromptCard, RevealStage, RulesSheet, Timer, playerOf, useSfxCount } from '../../client/kit';
 import type { ClientGameModule, PlayerProps, ScreenProps } from '../../client/gameModule';
 import type { Lobby } from '../../shared/types';
 // Type-only imports from logic.ts: a value import would pull zod and the game logic into this chunk.
@@ -11,13 +11,10 @@ import { normalize } from './match';
 import {
   FINAL_MS,
   MAX_ANSWER_LEN,
-  MAX_OPEN_PROPOSALS,
-  MERGE_MS,
   MULTIPLIERS,
   POINTS,
   UNIQUE_BONUS,
   UNIQUE_MIN_ROUNDS,
-  WRITE_MS,
   type Outcome,
 } from './rules';
 import { play } from './sfx';
@@ -31,8 +28,6 @@ const OUTCOME_LABEL: Record<Outcome, string> = {
   blank: 'No answer',
 };
 
-const pairKey = (a: number, b: number): string => (a < b ? `${a}-${b}` : `${b}-${a}`);
-
 function Temple({ class: cls }: { class?: string }) {
   return (
     <svg class={`sw-temple${cls ? ` ${cls}` : ''}`} viewBox="0 0 48 54" aria-hidden="true" focusable="false">
@@ -43,7 +38,7 @@ function Temple({ class: cls }: { class?: string }) {
 
 function Header({ view }: { view: SWView }) {
   const over = view.phase === 'final' || view.phase === 'done';
-  const total = view.phase === 'write' ? WRITE_MS : view.phase === 'merge' ? MERGE_MS : view.phase === 'final' ? FINAL_MS : undefined;
+  const total = view.phase === 'write' ? view.writeMs : view.phase === 'call' ? view.callMs : view.phase === 'final' ? FINAL_MS : undefined;
   return (
     <div class="g-spread sw-head">
       <span class="sw-head-id">
@@ -55,7 +50,7 @@ function Header({ view }: { view: SWView }) {
           &times;{view.mult}
         </span>
       )}
-      {(view.phase === 'write' || view.phase === 'merge') && <Timer deadline={view.deadline} total={total} urgentAt={10} />}
+      {(view.phase === 'write' || view.phase === 'call') && <Timer deadline={view.deadline} total={total} urgentAt={view.phase === 'call' ? 0 : 10} quiet={view.phase === 'call'} />}
     </div>
   );
 }
@@ -70,20 +65,10 @@ function Chapter({ view, size, compact }: { view: SWView; size?: 'l'; compact?: 
   );
 }
 
-function Marks({ n }: { n: number }) {
-  return (
-    <span class="sw-marks" role="img" aria-label={`${n} wrote this`}>
-      {Array.from({ length: n }, (_, i) => (
-        <i key={i} class={`sw-mark${n === 1 ? ' is-solo' : ''}`} />
-      ))}
-    </span>
-  );
-}
-
 function Pills({ view, lobby, size }: { view: SWView; lobby: Lobby; size: string }) {
   const here = view.players.filter((p) => !view.gone.includes(p));
   return (
-    <div class="sw-pills" aria-label={view.phase === 'merge' ? 'Who is done' : 'Who has submitted'}>
+    <div class="sw-pills" aria-label="Who has submitted">
       {here.map((id) => {
         const p = playerOf(lobby, id);
         return (
@@ -180,7 +165,7 @@ function WritePlayer({ view, send, lobby }: { view: SWView; send(a: SWAction): v
         <>
           <Verses view={view} answers={mine} />
           <p class="sw-hint">
-            Answer submitted. Waiting for {Math.max(0, hereCount(view) - view.locked.length)} more. Answers stay hidden until everyone has submitted or time runs out.
+            Answer submitted. Waiting for {Math.max(0, hereCount(view) - view.locked.length)} more. Each player's answers are shown on their turn.
           </p>
           <Pills view={view} lobby={lobby} size="30px" />
         </>
@@ -191,169 +176,288 @@ function WritePlayer({ view, send, lobby }: { view: SWView; send(a: SWAction): v
   );
 }
 
-// ---------- merge ----------
+// ---------- call: one player's words at a time ----------
 
-function PlateButton({ labels, selected, yours, onTap, disabled }: { labels: string[]; selected: boolean; yours: boolean; onTap?: () => void; disabled?: boolean }) {
+type Call = NonNullable<SWView['call']>;
+type Side = 'mine' | 'theirs';
+interface Pick {
+  side: Side;
+  i: number;
+}
+
+/**
+ * Drag one word onto the other (the one that matches), or tap one and then the other. Pointer events,
+ * not HTML drag and drop: that does not work on touch screens. Disabled plates get no props at all,
+ * so they are neither draggable nor a drop target.
+ */
+function useMatchPick(onMatch: (mine: number, theirs: number) => void) {
+  const [sel, setSel] = useState<Pick | null>(null);
+  const [drag, setDrag] = useState<{ from: Pick; over: Pick | null; x: number; y: number; text: string } | null>(null);
+  const start = useRef<{ from: Pick; x: number; y: number; text: string; moved: boolean } | null>(null);
+
+  const finish = (a: Pick, b: Pick) => {
+    if (a.side !== b.side) onMatch(a.side === 'mine' ? a.i : b.i, a.side === 'theirs' ? a.i : b.i);
+  };
+  const pickAt = (x: number, y: number): Pick | null => {
+    const el = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-side]');
+    return el ? { side: el.dataset.side as Side, i: Number(el.dataset.i) } : null;
+  };
+  const tap = (side: Side, i: number) => {
+    if (sel && sel.side !== side) {
+      finish(sel, { side, i });
+      setSel(null);
+    } else setSel(sel && sel.side === side && sel.i === i ? null : { side, i });
+  };
+
+  const bind = (side: Side, i: number, text: string, enabled: boolean) =>
+    enabled
+      ? {
+          'data-side': side,
+          'data-i': i,
+          role: 'button' as const,
+          tabIndex: 0,
+          onKeyDown(e: KeyboardEvent) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              tap(side, i);
+            }
+          },
+          onPointerDown(e: PointerEvent) {
+            start.current = { from: { side, i }, x: e.clientX, y: e.clientY, text, moved: false };
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          },
+          onPointerMove(e: PointerEvent) {
+            const s = start.current;
+            if (!s || (!s.moved && Math.hypot(e.clientX - s.x, e.clientY - s.y) < 8)) return;
+            s.moved = true;
+            const over = pickAt(e.clientX, e.clientY);
+            setDrag({ from: s.from, over: over && over.side !== s.from.side ? over : null, x: e.clientX, y: e.clientY, text: s.text });
+          },
+          onPointerUp(e: PointerEvent) {
+            const s = start.current;
+            start.current = null;
+            setDrag(null);
+            if (!s) return;
+            if (!s.moved) tap(side, i);
+            else {
+              const to = pickAt(e.clientX, e.clientY);
+              if (to) finish(s.from, to);
+              setSel(null);
+            }
+          },
+          onPointerCancel() {
+            start.current = null;
+            setDrag(null);
+          },
+        }
+      : {};
+
+  const is = (p: Pick | null, side: Side, i: number) => !!p && p.side === side && p.i === i;
+  return { bind, drag, selected: (side: Side, i: number) => is(sel, side, i) || is(drag?.from ?? null, side, i), over: (side: Side, i: number) => is(drag?.over ?? null, side, i), sel };
+}
+
+function Matchers({ ids, lobby, size }: { ids: string[]; lobby: Lobby; size: string }) {
   return (
-    <button type="button" class={`sw-plate sw-pick${selected ? ' is-selected' : ''}`} aria-pressed={selected} onClick={onTap} disabled={disabled}>
-      <span class="sw-pick-text">{labels[0]}</span>
-      {labels.length > 1 && <span class="sw-also">also: {labels.slice(1).join(' · ')}</span>}
-      {yours && <span class="sw-yours">Yours</span>}
-    </button>
+    <span class="sw-matchers" role="img" aria-label={`${ids.length} matched`}>
+      {ids.map((id) => {
+        const p = playerOf(lobby, id);
+        return <Avatar key={id} name={p?.name ?? '?'} color={p?.color ?? '#9aa5b1'} size={size} />;
+      })}
+    </span>
   );
 }
 
-function ProposalRow({
-  p,
-  groups,
-  need,
-  onVote,
+/** One of the active player's words: a plate that shows who matched it, or the error stamp. */
+function TheirWord({
+  w,
+  i,
+  view,
+  lobby,
   big,
+  props,
+  selected,
+  over,
 }: {
-  p: NonNullable<SWView['merge']>['proposals'][number];
-  groups: NonNullable<SWView['merge']>['groups'];
-  need: number;
-  onVote?: (yes: boolean) => void;
+  w: Call['words'][number];
+  i: number;
+  view: SWView;
+  lobby: Lobby;
   big?: boolean;
+  props?: Record<string, unknown>;
+  selected?: boolean;
+  over?: boolean;
 }) {
-  const la = groups.find((g) => g.id === p.a)?.labels[0] ?? '?';
-  const lb = groups.find((g) => g.id === p.b)?.labels[0] ?? '?';
+  const matched = w.matchers.length > 0;
   return (
-    <li class={`sw-prop${big ? ' is-big' : ''}`}>
-      <p class="sw-prop-q">
-        <b>{la}</b> <span class="sw-eq">=</span> <b>{lb}</b>?
-      </p>
-      <p class="sw-prop-tally">
-        <span class="sw-yes">{p.yes} same</span> <span class="sw-no">{p.no} different</span> <span class="g-muted">· needs {need}</span>
-      </p>
-      {onVote &&
-        (p.mine === null ? (
-          <div class="sw-vote-row">
-            <button type="button" class="btn btn-primary" onClick={() => onVote(true)}>
-              Same
-            </button>
-            <button type="button" class="btn" onClick={() => onVote(false)}>
-              Different
-            </button>
-          </div>
-        ) : (
-          <p class="sw-voted">{p.own ? 'You proposed this.' : `You voted ${p.mine === 'yes' ? 'same' : 'different'}.`}</p>
-        ))}
-    </li>
+    <div
+      class={`sw-plate sw-word${matched ? ' is-matched' : ''}${w.error ? ' is-error' : ''}${selected ? ' is-selected' : ''}${over ? ' is-over' : ''}${props?.role ? ' is-live' : ''}${big ? ' is-big' : ''}`}
+      {...props}
+    >
+      <span class="sw-vn">
+        {view.round}:{i + 1}
+      </span>
+      <span class="sw-word-text">{w.text}</span>
+      {matched && <Matchers ids={w.matchers} lobby={lobby} size={big ? '5vh' : '28px'} />}
+      {w.error && <span class="sw-stamp">No match</span>}
+    </div>
   );
 }
 
-function MergePlayer({ view, send }: { view: SWView; send(a: SWAction): void }) {
-  const m = view.merge!;
+function TurnId({ view, lobby, me, big }: { view: SWView; lobby: Lobby; me?: string; big?: boolean }) {
+  const call = view.call!;
+  const p = playerOf(lobby, call.active);
+  return (
+    <div class="sw-turn">
+      <Avatar name={p?.name ?? '?'} color={p?.color ?? '#9aa5b1'} size={big ? '9vh' : '44px'} />
+      <span class="sw-turn-body">
+        <span class="eyebrow">
+          Turn {call.turn} of {call.turns}
+        </span>
+        <b>{call.active === me ? 'Your words' : `${p?.name ?? 'Someone'}'s words`}</b>
+      </span>
+    </div>
+  );
+}
+
+function TurnScores({ view, lobby, me, big }: { view: SWView; lobby: Lobby; me?: string; big?: boolean }) {
+  const pts = view.call!.pts;
+  const ids = view.players.filter((p) => !view.gone.includes(p) || pts[p]);
+  ids.sort((a, b) => (pts[b] ?? 0) - (pts[a] ?? 0) || (view.scores[b] ?? 0) - (view.scores[a] ?? 0));
+  const size = big ? '5vh' : '34px';
+  return (
+    <div class="sw-scores">
+      <p class="eyebrow">Points this turn</p>
+      <div class="sw-score-list">
+        {ids.map((id) => {
+          const p = playerOf(lobby, id);
+          return (
+            <div key={id} class={`sw-score${id === me ? ' is-you' : ''}${(pts[id] ?? 0) > 0 ? ' is-pay' : ''}`}>
+              <Avatar name={p?.name ?? '?'} color={p?.color ?? '#9aa5b1'} size={size} />
+              <span class="sw-score-name">
+                {p?.name ?? 'Someone'}
+                {id === me && <span class="g-muted"> (you)</span>}
+              </span>
+              <span class="sw-score-pts">+{pts[id] ?? 0}</span>
+              <span class="sw-score-total">{view.scores[id] ?? 0}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** The transition cues, one after another: a chime for each matched word, the buzzer for each failed one. */
+function useResultSounds(call: Call) {
+  useEffect(() => {
+    const cues = call.words.flatMap((w) => (w.error ? [() => play('error')] : w.matchers.length ? [() => play('witness', { n: w.matchers.length + 1 })] : []));
+    const timers = cues.map((cue, k) => setTimeout(cue, 150 + k * 380));
+    return () => timers.forEach(clearTimeout);
+  }, []);
+}
+
+/** The count of matches on the active player's words: a tick climbs the scale as each one lands. */
+const matchCount = (view: SWView): number => (view.phase === 'call' && view.call ? view.call.words.reduce((n, w) => n + w.matchers.length, 0) : 0);
+
+function CallPlayer({ view, send, lobby, me }: { view: SWView; send(a: SWAction): void; lobby: Lobby; me: string }) {
+  const call = view.call!;
   const you = view.you!;
-  const [picked, setPicked] = useState<number[]>([]);
-  const sel = picked.filter((id) => m.groups.some((g) => g.id === id));
-  const toggle = (id: number) => setPicked(sel.includes(id) ? sel.filter((x) => x !== id) : sel.length >= 2 ? [sel[1], id] : [...sel, id]);
-  const two = sel.length === 2;
-  const key = two ? pairKey(sel[0], sel[1]) : '';
-  const lo = Math.min(...sel);
-  const hi = Math.max(...sel);
-  const blocked = two && you.refused.includes(key);
-  const dup = two && (m.closed.includes(key) || m.proposals.some((p) => p.a === lo && p.b === hi));
-  const full = you.open >= MAX_OPEN_PROPOSALS;
-  const done = you.done;
-  const wait = Math.max(0, hereCount(view) - view.locked.length);
-  const open = m.proposals;
+  const mine = you.answers ?? [];
+  const mineTurn = call.active === me;
+  const live = !mineTurn && mine.length > 0;
+  const pick = useMatchPick((m, th) => send({ type: 'match', mine: m, theirs: th }));
   return (
     <section class="sw-phone">
       <Header view={view} />
       <Chapter view={view} compact />
-      <h2 class="sw-h">Same answer?</h2>
-      <p class="g-muted sw-lede">
-        These are everyone's answers, with no names. Tap two plates that mean the same thing, then propose a match. A match needs {m.need} Same votes.
-      </p>
-      {open.length > 0 && (
-        <ul class="sw-props">
-          {open.map((p) => (
-            <ProposalRow key={p.id} p={p} groups={m.groups} need={m.need} onVote={(yes) => send({ type: 'vote', proposal: p.id, yes })} />
-          ))}
-        </ul>
-      )}
-      <div class="sw-picks">
-        {m.groups.map((g) => (
-          <PlateButton key={g.id} labels={g.labels} selected={sel.includes(g.id)} yours={you.mine.includes(g.id)} onTap={() => toggle(g.id)} />
+      <TurnId view={view} lobby={lobby} me={me} />
+      <div class="sw-words" aria-label="Their words">
+        {call.words.map((w, i) => (
+          <TheirWord key={i} w={w} i={i} view={view} lobby={lobby} props={pick.bind('theirs', i, w.text, live)} selected={pick.selected('theirs', i)} over={pick.over('theirs', i)} />
         ))}
       </div>
-      {(blocked || dup || full) && two && (
-        <p class="sw-hint is-warn">
-          {blocked ? 'One player wrote both of these, so they can’t be merged.' : dup ? 'This pair is already being voted on, or was voted down.' : `You already have ${MAX_OPEN_PROPOSALS} proposals open. Wait for a vote to finish.`}
-        </p>
-      )}
-      <div class="sw-dock">
-        {two ? (
-          <div class="sw-dock-row">
-            <button type="button" class="btn btn-ghost" onClick={() => setPicked([])}>
-              Clear
-            </button>
-            <button
-              type="button"
-              class="btn btn-primary"
-              disabled={blocked || dup || full}
-              onClick={() => {
-                send({ type: 'propose', a: sel[0], b: sel[1] });
-                setPicked([]);
-              }}
-            >
-              Propose a match
-            </button>
+      {mineTurn ? (
+        <p class="sw-hint">Everyone is matching your words. Matches show up on the plates.</p>
+      ) : live ? (
+        <>
+          <p class="sw-hint">Drag your word onto theirs when they match, or tap one then the other. Three seconds.</p>
+          <div class="sw-words sw-mine" aria-label="Your words">
+            {mine.map((text, i) => {
+              const dead = you.dead[i];
+              const claimed = you.claims[i];
+              return (
+                <div
+                  key={i}
+                  class={`sw-plate sw-word${you.matched[i] ? ' is-matched' : ''}${dead ? ' is-dead' : ''}${pick.selected('mine', i) ? ' is-selected' : ''}${pick.over('mine', i) ? ' is-over' : ''}${dead ? '' : ' is-live'}`}
+                  {...pick.bind('mine', i, text, !dead)}
+                >
+                  <span class="sw-vn">
+                    {view.round}:{i + 1}
+                  </span>
+                  <span class="sw-word-text">{text}</span>
+                  <span class="sw-yours">{dead ? 'No match' : claimed !== null ? 'Matched' : you.matched[i] ? 'Matched earlier' : 'Yours'}</span>
+                </div>
+              );
+            })}
           </div>
-        ) : (
-          <button type="button" class="btn btn-primary btn-block" disabled={done} onClick={() => send({ type: 'done' })}>
-            {done ? `Done. Waiting for ${wait} more.` : sel.length === 1 ? 'Pick a second plate, or tap Done' : 'Done'}
-          </button>
-        )}
+        </>
+      ) : (
+        <p class="sw-hint">You did not write anything this round. Watch the plates.</p>
+      )}
+      {pick.drag && (
+        <div class="sw-plate sw-ghost" style={{ left: `${pick.drag.x}px`, top: `${pick.drag.y}px` }} aria-hidden="true">
+          {pick.drag.text}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ResultPlayer({ view, lobby, me }: { view: SWView; lobby: Lobby; me: string }) {
+  const call = view.call!;
+  useResultSounds(call);
+  return (
+    <section class="sw-phone">
+      <Header view={view} />
+      <Chapter view={view} compact />
+      <TurnId view={view} lobby={lobby} me={me} />
+      <div class="sw-words">
+        {call.words.map((w, i) => (
+          <TheirWord key={i} w={w} i={i} view={view} lobby={lobby} />
+        ))}
+      </div>
+      <TurnScores view={view} lobby={lobby} me={me} />
+    </section>
+  );
+}
+
+function CallScreen({ view, lobby }: { view: SWView; lobby: Lobby }) {
+  const call = view.call!;
+  const result = view.phase === 'result';
+  return (
+    <section class="sw-screen">
+      <Header view={view} />
+      <div class="sw-stage sw-call-screen">
+        <Chapter view={view} size="l" compact />
+        <TurnId view={view} lobby={lobby} big />
+        <div class="sw-words is-big">
+          {call.words.map((w, i) => (
+            <TheirWord key={i} w={w} i={i} view={view} lobby={lobby} big />
+          ))}
+        </div>
+        {result ? <TurnScores view={view} lobby={lobby} big /> : <p class="sw-stage-hint">If you wrote the same thing, drag your word onto theirs on your phone. Quick!</p>}
       </div>
     </section>
   );
 }
 
-// ---------- reveal ----------
-
-/** A plate's sound as it is revealed: a lone clink, or a chime with one note per witness. */
-function plateSound(view: SWView) {
-  return (i: number) => {
-    const n = view.reveal?.groups[i]?.members.length ?? 1;
-    if (n >= 2) play('witness', { n });
-    else play('clink');
-  };
+/** Keyed by turn so each result plays its cues once. */
+function ResultScreen({ view, lobby }: { view: SWView; lobby: Lobby }) {
+  useResultSounds(view.call!);
+  return <CallScreen view={view} lobby={lobby} />;
 }
 
-function useRevealDone(view: SWView): boolean {
-  const now = useServerNow(250);
-  const r = view.reveal;
-  return !r || r.groups.length === 0 || now >= r.startAt + r.groups.length * r.interval;
-}
-
-function RevealPlate({ g, lobby, big }: { g: NonNullable<SWView['reveal']>['groups'][number]; lobby: Lobby; big?: boolean }) {
-  const n = g.members.length;
-  return (
-    <div class={`sw-plate sw-rplate${n >= 2 ? ' is-witnessed' : ' is-solo'}${big ? ' is-big' : ''}`}>
-      <div class="sw-rhead">
-        <span class="sw-rtext">{g.labels[0]}</span>
-        <Marks n={n} />
-      </div>
-      {g.labels.length > 1 && <span class="sw-also">also: {g.labels.slice(1).join(' · ')}</span>}
-      <ul class="sw-who">
-        {g.members.map((m) => {
-          const p = playerOf(lobby, m.p);
-          return (
-            <li key={m.p}>
-              <Avatar name={p?.name ?? '?'} color={p?.color ?? '#9aa5b1'} size={big ? '5vh' : '26px'} />
-              <span>{p?.name ?? 'Someone'}</span>
-              {m.t.toLowerCase() !== g.labels[0].toLowerCase() && <span class="sw-also">wrote &ldquo;{m.t}&rdquo;</span>}
-            </li>
-          );
-        })}
-      </ul>
-      <p class="sw-verdict">{n >= 2 ? `${n} players wrote this` : 'Only one player wrote this'}</p>
-    </div>
-  );
-}
+// ---------- round standings ----------
 
 function RoundScores({ view, lobby, me, big }: { view: SWView; lobby: Lobby; me?: string; big?: boolean }) {
   const r = view.reveal!;
@@ -391,69 +495,31 @@ function RoundScores({ view, lobby, me, big }: { view: SWView; lobby: Lobby; me?
 
 function RevealPlayer({ view, lobby, me }: { view: SWView; lobby: Lobby; me: string }) {
   const r = view.reveal!;
-  const done = useRevealDone(view);
   const mine = r.outcome[me];
   return (
     <section class="sw-phone">
       <Header view={view} />
       <Chapter view={view} compact />
-      {done ? (
-        <>
-          {mine && (
-            <p class={`sw-yourpts${(r.pts[me] ?? 0) > 0 ? ' is-pay' : ''}`}>
-              <b>+{r.pts[me] ?? 0}</b> {OUTCOME_LABEL[mine]}
-              {(r.pts[me] ?? 0) > 0 && view.mult > 1 ? ` (×${view.mult})` : ''}
-            </p>
-          )}
-          <RoundScores view={view} lobby={lobby} me={me} />
-        </>
-      ) : (
-        <p class="sw-hint">{r.groups.length ? 'Showing who wrote what, smallest groups first.' : 'Nobody wrote anything this round.'}</p>
+      {mine && (
+        <p class={`sw-yourpts${(r.pts[me] ?? 0) > 0 ? ' is-pay' : ''}`}>
+          <b>+{r.pts[me] ?? 0}</b> {OUTCOME_LABEL[mine]}
+          {(r.pts[me] ?? 0) > 0 && view.mult > 1 ? ` (×${view.mult})` : ''}
+        </p>
       )}
-      {r.groups.length > 0 && (
-        <RevealStage
-          key={view.round}
-          class="sw-stack"
-          startAt={r.startAt}
-          interval={r.interval}
-          sound={plateSound(view)}
-          items={r.groups.map((g) => (
-            <RevealPlate key={g.id} g={g} lobby={lobby} />
-          ))}
-        />
-      )}
+      <RoundScores view={view} lobby={lobby} me={me} />
     </section>
   );
 }
 
 function RevealScreen({ view, lobby }: { view: SWView; lobby: Lobby }) {
-  const r = view.reveal!;
-  const done = useRevealDone(view);
   return (
     <section class="sw-screen">
       <Header view={view} />
       <div class="sw-stage">
-        {done ? (
-          <div class="sw-stage-scores">
-            <Chapter view={view} size="l" compact />
-            <RoundScores view={view} lobby={lobby} big />
-          </div>
-        ) : (
-          <>
-            <p class="sw-stage-title">{view.prompt.text}</p>
-            <RevealStage
-              key={view.round}
-              class="sw-single"
-              layout="single"
-              startAt={r.startAt}
-              interval={r.interval}
-              sound={plateSound(view)}
-              items={r.groups.map((g) => (
-                <RevealPlate key={g.id} g={g} lobby={lobby} big />
-              ))}
-            />
-          </>
-        )}
+        <div class="sw-stage-scores">
+          <Chapter view={view} size="l" compact />
+          <RoundScores view={view} lobby={lobby} big />
+        </div>
       </div>
     </section>
   );
@@ -513,9 +579,11 @@ function FinalBoard({ view, lobby, me, big }: { view: SWView; lobby: Lobby; me?:
 // ---------- shells ----------
 
 function Player({ view, send, lobby, me }: PlayerProps<SWView, SWAction>) {
-  useSfxCount(view.locked.length); // a tick per answer in, per Done in the merge
+  useSfxCount(view.locked.length); // a tick per answer in
+  useSfxCount(matchCount(view)); // a tick per match on the plates
   if (view.phase === 'write') return <WritePlayer view={view} send={send} lobby={lobby} />;
-  if (view.phase === 'merge' && view.merge && view.you) return <MergePlayer view={view} send={send} />;
+  if (view.phase === 'call' && view.call && view.you) return <CallPlayer view={view} send={send} lobby={lobby} me={me} />;
+  if (view.phase === 'result' && view.call) return <ResultPlayer view={view} lobby={lobby} me={me} />;
   if (view.phase === 'reveal' && view.reveal) return <RevealPlayer view={view} lobby={lobby} me={me} />;
   return (
     <section class="sw-phone">
@@ -528,6 +596,9 @@ function Player({ view, send, lobby, me }: PlayerProps<SWView, SWAction>) {
 
 function Screen({ view, lobby }: ScreenProps<SWView>) {
   useSfxCount(view.locked.length);
+  useSfxCount(matchCount(view));
+  if (view.phase === 'call' && view.call) return <CallScreen view={view} lobby={lobby} />;
+  if (view.phase === 'result' && view.call) return <ResultScreen view={view} lobby={lobby} />;
   if (view.phase === 'reveal' && view.reveal) return <RevealScreen view={view} lobby={lobby} />;
   if (view.phase === 'final' || view.phase === 'done') {
     return (
@@ -536,41 +607,6 @@ function Screen({ view, lobby }: ScreenProps<SWView>) {
         <div class="sw-stage">
           <h2 class="g-title sw-final-title">Final totals</h2>
           <FinalBoard view={view} lobby={lobby} big />
-        </div>
-      </section>
-    );
-  }
-  if (view.phase === 'merge' && view.merge) {
-    const m = view.merge;
-    return (
-      <section class="sw-screen">
-        <Header view={view} />
-        <div class="sw-merge-screen">
-          <div class="sw-merge-left">
-            <Chapter view={view} size="l" compact />
-            <div class="sw-picks is-big">
-              {m.groups.map((g) => (
-                <PlateButton key={g.id} labels={g.labels} selected={false} yours={false} disabled />
-              ))}
-            </div>
-          </div>
-          <aside class="sw-merge-right">
-            <h2 class="sw-h">Same answer?</h2>
-            <p class="g-muted">On your phone, tap two plates that mean the same thing and propose a match. A match needs {m.need} Same votes.</p>
-            {m.proposals.length > 0 ? (
-              <ul class="sw-props">
-                {m.proposals.map((p) => (
-                  <ProposalRow key={p.id} p={p} groups={m.groups} need={m.need} big />
-                ))}
-              </ul>
-            ) : (
-              <p class="g-muted">No proposals yet.</p>
-            )}
-            <Pills view={view} lobby={lobby} size="6vh" />
-            <p class="g-muted">
-              {view.locked.length} of {hereCount(view)} done
-            </p>
-          </aside>
         </div>
       </section>
     );
@@ -597,10 +633,10 @@ function Rules() {
     <RulesSheet
       story="It is an old rule that a matter is settled by the mouth of two witnesses. Here, an answer only counts if someone else wrote it too. Each round, you all get the same category, and everyone secretly writes what they think the others will write."
       how={[
-        'Each round shows a category. Everyone secretly writes one or two answers, up to 40 characters each. One answer is the safe play. Two answers is the gamble.',
-        'Matching answers are grouped for you. Capitals, punctuation, accents and plurals do not matter, so "Temple" and "the temples" match.',
-        'Next, the groups appear as plates with no names. If two plates mean the same thing, tap both and propose a match. Everyone votes Same or Different. If more than half of the players here vote Same, the plates merge. You cannot merge two plates if one player wrote both.',
-        'Then every plate is revealed with the players who wrote it, and points are paid out. Later rounds are worth more.',
+        'Each round shows a category. You have 30 seconds to secretly write one or two answers, up to 40 characters each. One answer is the safe play. Two answers is the gamble.',
+        'Then the players take turns, in a random order. On your turn your words appear on every screen. Everyone else gets three seconds to say which of their own words match yours: drag your word onto theirs, or theirs onto yours. You decide what counts as a match, so be fair.',
+        'When the three seconds are up, any word that nobody matched fails with a buzz, and everyone sees the points they just earned. A failed word can no longer match. If every word is already matched, the round moves on.',
+        'After the last turn you see the round standings. Later rounds are worth more.',
       ]}
       scoring={[
         `One answer that someone else also wrote: ${POINTS.single} points`,
@@ -610,7 +646,7 @@ function Rules() {
         `There are ${MULTIPLIERS.length} rounds. Points are multiplied by ×${MULTIPLIERS.join(', ×')} in order`,
         `Unique thinker: if you wrote two answers and scored nothing in ${UNIQUE_MIN_ROUNDS} or more rounds, you get +${UNIQUE_BONUS} at the end`,
       ]}
-      note="Nobody sees anyone else's answers until the writing is over. If a player leaves, votes only count the players still here."
+      note="Nobody sees anyone else's answers until it is their turn. If a player leaves, their turn is skipped."
     />
   );
 }

@@ -6,6 +6,7 @@ import { defineGame, type GameCtx } from '../../core/game';
 import type { Rng } from '../../core/rng';
 import { sanitizeName } from '../../shared/limits';
 import { StrokesSchema } from '../../shared/strokeSchema';
+import type { SettingField } from '../../shared/types';
 import { makeDrawing, type Stroke } from '../../shared/strokes';
 import { INGREDIENTS, MEAL_PROMPTS, SCENE_ELEMENTS } from './content';
 import {
@@ -85,7 +86,22 @@ export interface DishResult {
   artists: string[];
 }
 
+export interface CookSettings {
+  /** Seconds to draw one prop. */
+  drawSeconds: number;
+  /** Seconds to build the dish. */
+  cookSeconds: number;
+}
+
+const settingsFields: SettingField[] = [
+  { key: 'drawSeconds', label: 'Drawing time', hint: 'Per prop', min: 30, max: 150, step: 15, unit: 's' },
+  { key: 'cookSeconds', label: 'Cooking time', hint: 'To build the dish', min: 60, max: 300, step: 30, unit: 's' },
+];
+
 export interface CookState {
+  /** Length of a drawing round and of the cooking round, in ms. */
+  drawMs: number;
+  cookMs: number;
   playerIds: string[];
   names: Record<string, string>;
   phase: CookPhase;
@@ -128,6 +144,9 @@ export interface CookView {
   round: number;
   rounds: number;
   deadline: number | null;
+  /** Length of a drawing round and of the cooking round, for the timer ring. */
+  drawMs: number;
+  cookMs: number;
   /** `by` (the prop's artist) only from the reveal on: with it, the props on a dish (never the
    *  cook's own) would narrow down who cooked it. */
   pantry: { id: number; asset: string; name: string; by?: string }[];
@@ -201,7 +220,7 @@ function startDraw(s: CookState, ctx: GameCtx, round: number): void {
   s.round = round;
   const pool = ctx.rng.shuffle(round === 1 ? INGREDIENTS : SCENE_ELEMENTS);
   s.playerIds.forEach((id, i) => (s.itemPrompts[id] = pool[i % pool.length]));
-  enter(s, ctx, 'draw', DRAW_MS);
+  enter(s, ctx, 'draw', s.drawMs);
 }
 
 function startCook(s: CookState, ctx: GameCtx): void {
@@ -216,7 +235,7 @@ function startCook(s: CookState, ctx: GameCtx): void {
     if (hand.length < MIN_HAND) hand.push(...ctx.rng.shuffle(own).slice(0, MIN_HAND - hand.length));
     s.hands[id] = hand;
   }
-  enter(s, ctx, 'cook', COOK_MS);
+  enter(s, ctx, 'cook', s.cookMs);
 }
 
 function endDraw(s: CookState, ctx: GameCtx): void {
@@ -283,7 +302,7 @@ export function botStrokes(rng: Rng): Stroke[] {
 
 // ---------------------------------------------------------------- game
 
-export default defineGame<CookState, CookAction, Record<string, never>>({
+export default defineGame<CookState, CookAction, CookSettings>({
   manifest: {
     id: 'cracked-cookbook',
     title: 'Cracked Cookbook',
@@ -293,11 +312,14 @@ export default defineGame<CookState, CookAction, Record<string, never>>({
     screen: 'optional',
     estMinutes: 10,
   },
-  defaultSettings: {},
+  defaultSettings: { drawSeconds: DRAW_MS / 1000, cookSeconds: COOK_MS / 1000 },
+  settingsFields,
   actionSchema,
 
-  setup(ctx, players) {
+  setup(ctx, players, settings) {
     const s: CookState = {
+      drawMs: settings.drawSeconds * 1000,
+      cookMs: settings.cookSeconds * 1000,
       playerIds: players.map((p) => p.id),
       names: Object.fromEntries(players.map((p) => [p.id, p.name])),
       phase: 'draw',
@@ -384,6 +406,8 @@ export default defineGame<CookState, CookAction, Record<string, never>>({
       round: s.round,
       rounds: DRAW_ROUNDS,
       deadline: s.phase === 'done' ? null : s.deadline,
+      drawMs: s.drawMs,
+      cookMs: s.cookMs,
       pantry: s.props.map((p, i) => ({ id: i, asset: p.asset, name: p.name, ...(revealed ? { by: p.by } : {}) })),
       waiting,
       orders: s.phase === 'cook' ? s.playerIds.map((id) => s.meals[id] ?? '').filter(Boolean).sort() : null,

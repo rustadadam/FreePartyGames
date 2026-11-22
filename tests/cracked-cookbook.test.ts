@@ -38,7 +38,7 @@ const players = ['a', 'b', 'c', 'd'].map((id) => ({ id, name: id.toUpperCase(), 
 /** Plays both drawing rounds so every player has two props, and returns a state at the cook phase. */
 function toCook(count = 4) {
   const { ctx } = fakeCtx();
-  const s = game.setup(ctx, players.slice(0, count), {});
+  const s = game.setup(ctx, players.slice(0, count), game.defaultSettings);
   for (let round = 0; round < 2; round++) {
     for (const p of players.slice(0, count)) game.onAction(s, ctx, p.id, { type: 'prop', strokes, name: `${p.id}${round}` });
   }
@@ -204,7 +204,7 @@ describe('cracked cookbook: anonymous dishes', () => {
 describe('cracked cookbook: late drafts', () => {
   it('a round-1 prop arriving in round 2 does not use up the round-2 drawing', () => {
     const { ctx } = fakeCtx();
-    const s = game.setup(ctx, players, {});
+    const s = game.setup(ctx, players, game.defaultSettings);
     game.onTimer!(s, ctx, 'phase');
     expect(s.round).toBe(2);
     game.onAction(s, ctx, 'a', { type: 'prop', strokes, name: 'late', round: 1 });

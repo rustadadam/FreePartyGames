@@ -25,7 +25,7 @@ import type { AssetMap, ClientGameModule, PlayerProps, ScreenProps } from '../..
 import type { Lobby } from '../../shared/types';
 // Type-only imports from logic.ts: a value import would pull zod and the game logic into this chunk.
 import type { CookAction, CookView, DishView, Sticker } from './logic';
-import { COOK_MS, DRAW_MS, MAX_STICKERS, NAME_MAX, PROP_PTS, STICKER_BASE_PCT, VOTE_MS, VOTE_PTS } from './rules';
+import { MAX_STICKERS, NAME_MAX, PROP_PTS, STICKER_BASE_PCT, VOTE_MS, VOTE_PTS } from './rules';
 import { play } from './sfx';
 import './ui.css';
 
@@ -107,8 +107,8 @@ function Waiting({ ids, lobby, size }: { ids: string[]; lobby: Lobby; size?: str
   );
 }
 
-function phaseTotal(phase: CookView['phase']): number {
-  return phase === 'draw' ? DRAW_MS : phase === 'cook' ? COOK_MS : VOTE_MS;
+function phaseTotal(view: CookView): number {
+  return view.phase === 'draw' ? view.drawMs : view.phase === 'cook' ? view.cookMs : VOTE_MS;
 }
 
 function phaseLabel(v: CookView): string {
@@ -129,7 +129,7 @@ function Bar({ view, size }: { view: CookView; size?: 'm' | 'l' }) {
   return (
     <div class="g-spread cc-bar">
       <span class="cc-tape eyebrow">{phaseLabel(view)}</span>
-      <Timer deadline={view.deadline} total={phaseTotal(view.phase)} size={size} quiet={view.phase !== 'draw' && view.phase !== 'cook' && view.phase !== 'vote'} />
+      <Timer deadline={view.deadline} total={phaseTotal(view)} size={size} quiet={view.phase !== 'draw' && view.phase !== 'cook' && view.phase !== 'vote'} />
     </div>
   );
 }
@@ -277,7 +277,7 @@ function Compose({ view, send, assets }: { view: CookView; send(a: CookAction): 
             <span class="eyebrow">Your order</span>
             <b>{you.meal}</b>
           </p>
-          <Timer deadline={view.deadline} total={COOK_MS} />
+          <Timer deadline={view.deadline} total={view.cookMs} />
         </div>
         <DrawingCanvas
           strokes={strokes}
@@ -503,7 +503,7 @@ function Screen({ view, lobby, assets: _shared }: ScreenProps<CookView>) {
             <p class="cc-tape eyebrow">{phaseLabel(view)}</p>
             <h1 class="g-title">{view.round === 1 ? 'Draw an ingredient on your phone, then name it.' : 'Draw a scene element on your phone, then name it.'}</h1>
           </div>
-          <Timer deadline={view.deadline} total={DRAW_MS} size="l" />
+          <Timer deadline={view.deadline} total={view.drawMs} size="l" />
         </header>
         <PantryWall pantry={view.pantry} assets={assets} lobby={lobby} class="cc-wall-screen" />
         <Waiting ids={view.waiting} lobby={lobby} size="4vh" />
@@ -521,7 +521,7 @@ function Screen({ view, lobby, assets: _shared }: ScreenProps<CookView>) {
             <p class="cc-tape eyebrow">{phaseLabel(view)}</p>
             <h1 class="g-title">Build your dish on your phone, using drawings from other players.</h1>
           </div>
-          <Timer deadline={view.deadline} total={COOK_MS} size="l" />
+          <Timer deadline={view.deadline} total={view.cookMs} size="l" />
         </header>
         <div class="cc-orders">
           {(view.orders ?? []).map((meal, i) => (

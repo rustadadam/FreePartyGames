@@ -268,7 +268,7 @@ function PromptStep({ view, send }: { view: CscView; send(a: CscAction): void })
       <section class="g-stack cs-body">
         <div class="g-spread">
           <span class="eyebrow">Step 1 · Write a premise</span>
-          <Timer deadline={view.deadline} total={60_000} />
+          <Timer deadline={view.deadline} total={view.promptMs} />
         </div>
         <Caption>Write the idea for a comic. Another player will draw the first panel.</Caption>
         <textarea
@@ -320,7 +320,7 @@ function DrawStep({ view, send, assets, lobby }: { view: CscView; send(a: CscAct
       <section class="g-stack cs-body">
         <div class="g-spread">
           <span class="eyebrow">Panel {view.round} of 3</span>
-          <Timer deadline={view.deadline} total={75_000} onExpire={submit} />
+          <Timer deadline={view.deadline} total={view.drawMs} onExpire={submit} />
         </div>
         {src?.kind === 'prompt' ? (
           <div class="cs-source">
@@ -431,7 +431,7 @@ function Screen({ view, assets: _a, lobby }: ScreenProps<CscView>) {
         <section class="cs-stage cs-center">
           <p class="eyebrow">{view.phase === 'prompt' ? 'Round 1 · Premises' : `Panel ${view.round} of 3`}</p>
           <p class="g-title">{view.phase === 'prompt' ? 'Write a comic premise on your phone' : 'Draw your panel on your phone'}</p>
-          <Timer deadline={view.deadline} total={view.phase === 'prompt' ? 60_000 : 75_000} size="l" />
+          <Timer deadline={view.deadline} total={view.phase === 'prompt' ? view.promptMs : view.drawMs} size="l" />
           <Progress view={view} lobby={lobby} />
         </section>
       );

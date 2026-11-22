@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import secondWitness, { type SWState, type SWView } from '../src/games/second-witness/logic';
 import { PROMPTS } from '../src/games/second-witness/content';
 import { basePoints, normalize } from '../src/games/second-witness/match';
-import { MAX_ANSWER_LEN, MAX_OPEN_PROPOSALS, MULTIPLIERS, POINTS, UNIQUE_BONUS } from '../src/games/second-witness/rules';
+import { CALL_MS, MAX_ANSWER_LEN, MULTIPLIERS, POINTS, UNIQUE_BONUS, WRITE_MS } from '../src/games/second-witness/rules';
 import { createHarness, findLeaks, recordViews, simulateGame, type RoomHarness } from '../src/core/testkit';
 
 describe('second-witness normalization', () => {
@@ -86,14 +86,26 @@ function setup(n: number, seed = 1): Env {
 
 const submit = (e: Env, i: number, ...answers: string[]) => e.h.room.runAction(e.ids[i], { type: 'submit', answers });
 const act = (e: Env, i: number, action: unknown) => e.h.room.runAction(e.ids[i], action);
-const groupOf = (e: Env, text: string) => e.st().groups.find((g) => g.members.some((m) => m.t === text))!.id;
+const screenView = (e: Env) => secondWitness.view(e.st(), { kind: 'screen' }) as SWView;
 
-/** Everyone submits (index -> answers), skips the merge phase and returns this round's points. Then moves on. */
+/** On the active player's turn, everyone claims every pair of words that normalize the same. */
+function callMatches(e: Env): void {
+  const s = e.st();
+  const active = s.order[s.turn];
+  e.ids.forEach((id, i) => {
+    if (id === active) return;
+    (s.answers[id] ?? []).forEach((mine, m) => s.answers[active].forEach((theirs, th) => normalize(mine) === normalize(theirs) && act(e, i, { type: 'match', mine: m, theirs: th })));
+  });
+}
+
+/** Everyone submits (index -> answers), every turn gets its matches, and this round's points come back. Then moves on. */
 function playRound(e: Env, answers: string[][]): number[] {
   expect(e.st().phase).toBe('write');
   answers.forEach((a, i) => submit(e, i, ...a));
-  if (e.st().phase === 'merge') e.ids.forEach((_, i) => act(e, i, { type: 'done' }));
-  expect(e.st().phase).toBe('reveal');
+  while (e.st().phase !== 'reveal') {
+    if (e.st().phase === 'call') callMatches(e);
+    e.h.step();
+  }
   const pts = e.ids.map((id) => e.st().roundPts[id]);
   e.h.step();
   return pts;
@@ -157,154 +169,110 @@ describe('second-witness round scoring', () => {
   });
 });
 
-describe('second-witness merge phase', () => {
-  /** 5 players, each with a distinct answer: five groups, 3 yes votes needed. */
-  function mergeRoom(extra?: (e: Env) => void): Env {
-    const e = setup(5);
-    submit(e, 0, 'alpha');
-    submit(e, 1, 'beta');
-    submit(e, 2, 'gamma');
-    submit(e, 3, 'delta');
-    submit(e, 4, 'epsilon');
-    expect(e.st().phase).toBe('merge');
-    extra?.(e);
-    return e;
-  }
-
-  it('sticks a merge only when yes votes exceed half of the players present', () => {
-    const e = mergeRoom();
-    act(e, 0, { type: 'propose', a: groupOf(e, 'alpha'), b: groupOf(e, 'beta') });
-    expect(e.st().proposals).toHaveLength(1);
-    const pid = e.st().proposals[0].id;
-    act(e, 1, { type: 'vote', proposal: pid, yes: true });
-    expect(e.st().groups).toHaveLength(5); // 2 of 5 is not a majority
-    act(e, 2, { type: 'vote', proposal: pid, yes: true });
-    expect(e.st().groups).toHaveLength(4); // 3 of 5 is
-    expect(e.st().proposals).toHaveLength(0);
-    expect(e.st().groups.find((g) => g.members.some((m) => m.t === 'alpha'))!.members.map((m) => m.t).sort()).toEqual(['alpha', 'beta']);
+describe('second-witness call phase', () => {
+  it('gives 30 s to write and 3 s per turn, and shows each player\'s words in turn', () => {
+    expect([WRITE_MS, CALL_MS]).toEqual([30_000, 3_000]);
+    const e = setup(4);
+    expect(screenView(e).deadline! - e.h.clock.now()).toBe(WRITE_MS);
+    submit(e, 0, 'x');
+    submit(e, 1, 'x');
+    submit(e, 2, 'y');
+    submit(e, 3, 'z');
+    const s = e.st();
+    expect(s.phase).toBe('call');
+    expect([...s.order].sort()).toEqual([...e.ids].sort());
+    expect(screenView(e).deadline! - e.h.clock.now()).toBe(CALL_MS);
+    const first = e.ids.indexOf(s.order[0]);
+    expect(screenView(e).call!.words.map((w) => w.text)).toEqual(s.answers[e.ids[first]]);
   });
 
-  it('counts only players still present when someone leaves mid-vote', () => {
-    const e = mergeRoom();
-    act(e, 0, { type: 'propose', a: groupOf(e, 'alpha'), b: groupOf(e, 'beta') });
-    act(e, 1, { type: 'vote', proposal: e.st().proposals[0].id, yes: true });
-    expect(e.st().groups).toHaveLength(5);
-    // Two of the five leave: 2 yes of 3 present is a majority.
-    expect(e.h.room.runHostCommand({ type: 'kick', playerId: e.ids[3] })).toBeNull();
-    expect(e.h.room.runHostCommand({ type: 'kick', playerId: e.ids[4] })).toBeNull();
-    expect(e.st().groups).toHaveLength(4);
+  it('a claim matches both words; unmatched words fail; points are paid at the end of each turn', () => {
+    const e = setup(4);
+    ['x', 'x', 'y', 'z'].forEach((w, i) => submit(e, i, w));
+    const active = e.ids.indexOf(e.st().order[0]);
+    const paired = active < 2;
+    if (paired) {
+      act(e, 1 - active, { type: 'match', mine: 0, theirs: 0 });
+      expect(screenView(e).call!.words[0].matchers).toEqual([e.ids[1 - active]]);
+    }
+    expect(screenView(e).call!.pts).toEqual({}); // nothing is paid until the turn ends
+    e.h.step(); // the 3 seconds are up
+    const v = screenView(e);
+    expect(e.st().phase).toBe('result');
+    expect(v.call!.words[0].error).toBe(!paired);
+    expect(Object.values(v.call!.pts).reduce((a, b) => a + b, 0)).toBe(paired ? 6 : 0);
+    expect(v.scores[e.ids[active]]).toBe(paired ? 3 : 0);
   });
 
-  it('drops a proposal that can no longer reach a majority and does not allow it again', () => {
-    const e = mergeRoom();
-    act(e, 0, { type: 'propose', a: groupOf(e, 'alpha'), b: groupOf(e, 'beta') });
-    const { id } = e.st().proposals[0];
-    for (const i of [1, 2, 3]) act(e, i, { type: 'vote', proposal: id, yes: false });
-    expect(e.st().proposals).toHaveLength(0);
-    expect(e.st().groups).toHaveLength(5);
-    act(e, 4, { type: 'propose', a: groupOf(e, 'alpha'), b: groupOf(e, 'beta') });
-    expect(e.st().proposals).toHaveLength(0);
-  });
-
-  it('chains merges: A+B then B+C ends as one group', () => {
-    const e = mergeRoom();
-    const [ga, gb, gc] = ['alpha', 'beta', 'gamma'].map((t) => groupOf(e, t));
-    act(e, 0, { type: 'propose', a: ga, b: gb });
-    act(e, 0, { type: 'propose', a: gb, b: gc });
-    const [p1, p2] = e.st().proposals;
-    act(e, 3, { type: 'vote', proposal: p1.id, yes: true });
-    act(e, 4, { type: 'vote', proposal: p1.id, yes: true });
-    // p2 followed the surviving group id and is still open.
-    expect(e.st().groups).toHaveLength(4);
-    expect(e.st().proposals).toHaveLength(1);
-    act(e, 3, { type: 'vote', proposal: p2.id, yes: true });
-    act(e, 4, { type: 'vote', proposal: p2.id, yes: true });
-    expect(e.st().groups).toHaveLength(3);
-    const big = e.st().groups.find((g) => g.members.length === 3)!;
-    expect(big.members.map((m) => m.t).sort()).toEqual(['alpha', 'beta', 'gamma']);
-  });
-
-  it('rejects a proposal when one player wrote answers in both groups', () => {
-    const e = setup(5);
-    submit(e, 0, 'alpha', 'beta'); // P1 wrote both
-    submit(e, 1, 'gamma');
-    submit(e, 2, 'delta');
-    submit(e, 3, 'epsilon');
-    submit(e, 4, 'zeta');
-    expect(e.st().phase).toBe('merge');
-    act(e, 1, { type: 'propose', a: groupOf(e, 'alpha'), b: groupOf(e, 'beta') });
-    expect(e.st().proposals).toHaveLength(0);
-    expect(e.st().refused[e.ids[1]]).toHaveLength(1);
-    // The refusal stays private to the proposer.
-    expect((secondWitness.view(e.st(), { kind: 'player', id: e.ids[1] }) as SWView).you!.refused).toHaveLength(1);
-    expect((secondWitness.view(e.st(), { kind: 'player', id: e.ids[2] }) as SWView).you!.refused).toHaveLength(0);
-    // A merge that becomes invalid through chaining is dropped too: alpha+gamma, then gamma+beta would join P1's two answers.
-    act(e, 1, { type: 'propose', a: groupOf(e, 'alpha'), b: groupOf(e, 'gamma') });
-    act(e, 1, { type: 'propose', a: groupOf(e, 'gamma'), b: groupOf(e, 'beta') });
-    expect(e.st().proposals).toHaveLength(2);
-    const first = e.st().proposals[0].id;
-    act(e, 2, { type: 'vote', proposal: first, yes: true });
-    act(e, 3, { type: 'vote', proposal: first, yes: true });
-    expect(e.st().groups).toHaveLength(5);
-    expect(e.st().proposals).toHaveLength(0);
-  });
-
-  it('caps open proposals per player', () => {
-    const e = mergeRoom();
-    const g = ['alpha', 'beta', 'gamma', 'delta', 'epsilon'].map((t) => groupOf(e, t));
-    // Player 5 (index 4) proposes pairs it has no answers in: alpha-beta, alpha-gamma, alpha-delta, beta-gamma.
-    for (const [a, b] of [[0, 1], [0, 2], [0, 3], [1, 2]]) act(e, 4, { type: 'propose', a: g[a], b: g[b] });
-    expect(e.st().proposals.filter((p) => p.by === e.ids[4])).toHaveLength(MAX_OPEN_PROPOSALS);
-  });
-
-  it('ends when everyone present taps Done, and ignores stale votes after the phase', () => {
-    const e = mergeRoom();
-    e.ids.slice(0, 4).forEach((_, i) => act(e, i, { type: 'done' }));
-    expect(e.st().phase).toBe('merge');
-    e.h.room.runHostCommand({ type: 'kick', playerId: e.ids[4] });
-    expect(e.st().phase).toBe('reveal');
-    expect(() => act(e, 0, { type: 'propose', a: 1, b: 2 })).not.toThrow();
-  });
-
-  it('skips the merge phase when fewer than 2 groups', () => {
+  it('ignores your own claims, out-of-range words and other phases; repeating a claim takes it back; a claim can be moved', () => {
     const e = setup(3);
-    submit(e, 0, 'same');
-    submit(e, 1, 'Same');
-    submit(e, 2, 'the same');
-    expect(e.st().phase).toBe('reveal');
+    submit(e, 0, 'a', 'b');
+    submit(e, 1, 'a');
+    submit(e, 2, 'c');
+    // Walk to player 1's turn (nobody claims, so nothing ends a turn early).
+    const claims = () => e.st().claims.length;
+    while (e.st().order[e.st().turn] !== e.ids[0]) e.h.step();
+    expect(e.st().phase).toBe('call');
+    const before = claims();
+    act(e, 0, { type: 'match', mine: 0, theirs: 0 }); // the active player
+    act(e, 2, { type: 'match', mine: 1, theirs: 0 }); // player 3 has one word only
+    expect(claims()).toBe(before);
+    act(e, 1, { type: 'match', mine: 0, theirs: 1 });
+    act(e, 1, { type: 'match', mine: 0, theirs: 0 }); // moved
+    expect(claims() - before).toBe(1);
+    expect(screenView(e).call!.words.map((w) => w.matchers.length)).toEqual([1, 0]);
+    act(e, 1, { type: 'match', mine: 0, theirs: 0 }); // again: taken back
+    expect(claims()).toBe(before);
+  });
+
+  it('ends the turn at once when every word is matched, then skips to the standings', () => {
+    const e = setup(3);
+    [0, 1, 2].forEach((i) => submit(e, i, 'same'));
+    const active = e.ids.indexOf(e.st().order[0]);
+    [0, 1, 2].filter((i) => i !== active).forEach((i) => act(e, i, { type: 'match', mine: 0, theirs: 0 }));
+    expect(e.st().phase).toBe('result'); // no waiting for the 3 seconds
+    e.h.step();
+    expect(e.st().phase).toBe('reveal'); // nothing left to match, so the other turns are skipped
+    expect(e.ids.map((id) => e.st().roundPts[id])).toEqual([3, 3, 3]);
+  });
+
+  it('ends the turn when the active player leaves', () => {
+    const e = setup(4);
+    ['a', 'b', 'c', 'd'].forEach((w, i) => submit(e, i, w));
+    const active = e.st().order[0];
+    expect(e.h.room.runHostCommand({ type: 'kick', playerId: active })).toBeNull();
+    expect(e.st().phase).toBe('result');
+    e.h.step();
+    expect(e.st().order[e.st().turn]).not.toBe(active);
   });
 });
 
 describe('second-witness secrets', () => {
   for (const players of [3, 8, 20]) {
     for (const seed of [1, 2, 3]) {
-      it(`no view holds another player's answers before the write phase ends (${players} players, seed ${seed})`, () => {
+      it(`no view holds another player's answers, except the active player's words on their turn (${players} players, seed ${seed})`, () => {
         const { records } = recordViews<SWState>(secondWitness, { players, seed, screen: true });
         let checked = 0;
         const leaks = findLeaks(records, (r) => {
-          if (r.state.phase !== 'write') return null;
-          const own = new Set((r.state.answers[r.viewerKey] ?? []).map((t) => t.toLowerCase()));
+          const s = r.state;
+          if (s.phase !== 'write' && s.phase !== 'call' && s.phase !== 'result') return null;
+          const active = s.phase === 'write' ? '' : s.order[s.turn];
+          const allowed = new Set([...(s.answers[r.viewerKey] ?? []), ...(s.answers[active] ?? [])].map((t) => t.toLowerCase()));
           const prompt = (r.view as SWView).prompt.text.toLowerCase();
-          const others = Object.entries(r.state.answers)
-            .filter(([p]) => p !== r.viewerKey)
+          const others = Object.entries(s.answers)
+            .filter(([p]) => p !== r.viewerKey && p !== active)
             .flatMap(([, a]) => a)
-            .filter((t) => !own.has(t.toLowerCase()) && t.toLowerCase() !== prompt);
+            .filter((t) => !allowed.has(t.toLowerCase()) && t.toLowerCase() !== prompt);
           if (others.length) checked++;
           return { exact: others };
         });
         expect(leaks).toEqual([]);
         expect(checked).toBeGreaterThan(0);
-        // The merge phase is anonymous: no player id anywhere in the groups or proposals.
-        for (const r of records) {
-          if (r.state.phase !== 'merge') continue;
-          const merge = JSON.stringify((r.view as SWView).merge);
-          for (const id of r.state.playerIds) expect(merge).not.toContain(`"${id}"`);
-        }
       });
     }
   }
 
-  it('hides distinctive answers from everyone else until the write phase is over', () => {
+  it('hides distinctive answers from everyone else until it is their turn', () => {
     const h = createHarness({ seed: 4 });
     const screen = h.join('Screen', { role: 'screen' });
     const clients = ['A', 'B', 'C', 'D'].map((n) => h.join(n));
@@ -321,10 +289,16 @@ describe('second-witness secrets', () => {
       expect(seen(c)).toContain(secret(i));
       for (const j of [0, 1, 2]) if (j !== i) expect(seen(c)).not.toContain(secret(j));
     });
-    // The fourth locks in: the phase ends, and the groups are shown anonymously.
+    // The fourth locks in: the call phase starts, and only the active player's words are shown to the others.
     h.room.runAction(clients[3].id, { type: 'submit', answers: ['other'] });
-    expect(state().phase).toBe('merge');
-    expect(seen(screen)).toContain('zzqx-secret-0');
+    expect(state().phase).toBe('call');
+    const active = clients.findIndex((c) => c.id === state().order[state().turn]);
+    for (const [name, viewer, own] of [['screen', screen, -1], ...clients.map((c, i) => [`client ${i}`, c, i] as const)] as const) {
+      for (const j of [0, 1, 2]) {
+        const shown = j === active || j === own;
+        expect(seen(viewer).includes(secret(j)), `${name} sees ${secret(j)}`).toBe(shown);
+      }
+    }
   });
 });
 

@@ -1,7 +1,7 @@
 // The game contract. A game plugs into the platform only through GameDefinition
 // plus one line in each registry (src/games/registry.server.ts / registry.client.ts).
 import type { ZodType, ZodTypeDef } from 'zod';
-import type { GameResult, Manifest, PlayerInfo, Viewer } from '../shared/types';
+import type { GameResult, Manifest, PlayerInfo, SettingField, Viewer } from '../shared/types';
 import type { Rng } from './rng';
 
 export interface GameCtx {
@@ -30,6 +30,12 @@ export interface GameCtx {
 export interface GameDefinition<S, A, Settings = Record<string, never>> {
   manifest: Manifest;
   defaultSettings: Settings;
+  /**
+   * Settings the host may change in the lobby (the shell renders them). Every key must be in
+   * `defaultSettings` and every default must sit inside its field's range. `setup` receives
+   * `defaultSettings` overlaid with the host's picks, already clamped, but should still read them defensively.
+   */
+  settingsFields?: SettingField[];
   actionSchema: ZodType<A, ZodTypeDef, unknown>;
   /** Players are in seat order. Arm the first timer(s) here. */
   setup(ctx: GameCtx, players: PlayerInfo[], settings: Settings): S;

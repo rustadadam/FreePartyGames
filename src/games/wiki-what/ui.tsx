@@ -9,7 +9,7 @@ import { play } from './sfx';
 import './ui.css';
 
 const MARKS = ['[1]', '[2]', '[3]', '[4]'];
-const TOTAL_MS = { ask: 25_000, accuse: 25_000, reveal: 8_000, moleReveal: 10_000 } as const;
+const TOTAL_MS = { accuse: 25_000, reveal: 8_000, moleReveal: 10_000 } as const;
 
 /** Sound (room audio device only): a tick per answer or accusation; the Mole sting, then points. */
 function useWikiCues(view: WikiView) {
@@ -35,7 +35,7 @@ function Header({ view, big }: { view: WikiView; big?: boolean }) {
       {live && view.phase !== 'moleReveal' && (
         <Timer
           deadline={view.deadline}
-          total={TOTAL_MS[view.phase as keyof typeof TOTAL_MS]}
+          total={view.phase === 'ask' ? view.askMs : TOTAL_MS[view.phase as keyof typeof TOTAL_MS]}
           size={big ? 'l' : 'm'}
           urgentAt={5}
           quiet={view.phase === 'reveal'}

@@ -35,6 +35,30 @@ export interface Manifest {
   hidden?: boolean;
 }
 
+/**
+ * One number the host can change in the lobby before a game starts (rounds, seconds per phase).
+ * A game lists these as `settingsFields`; the shell renders them, so no game ships settings UI.
+ */
+export interface SettingField {
+  /** Key in the game's settings object (and in `defaultSettings`). */
+  key: string;
+  label: string;
+  /** One short line under the label. */
+  hint?: string;
+  min: number;
+  max: number;
+  step: number;
+  /** Shown after the value, e.g. 's' for seconds. */
+  unit?: string;
+}
+
+/** The selected game's settings, as the lobby shows them. */
+export interface LobbySettings {
+  gameId: string;
+  fields: SettingField[];
+  values: Record<string, number>;
+}
+
 /** Returned by GameDefinition.result() when the game is over. */
 export interface GameResult {
   /** Points earned this game, per player id. Missing ids score 0. */
@@ -63,6 +87,8 @@ export interface Lobby {
   screenConnected: boolean;
   phase: Phase;
   selectedGameId: string | null;
+  /** Host-editable settings of the selected game, or null when it has none. */
+  settings: LobbySettings | null;
   /** Game being played (or whose results are showing). */
   currentGameId: string | null;
   /** Player ids seated in the current game. Players who joined later wait for the next one. */

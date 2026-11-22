@@ -5,7 +5,7 @@ import { ConfirmButton } from './ConfirmButton';
 import { GameStage } from './GameStage';
 import { AddBots, GamePicker, PlayerWall, SelectedGame, StartButton } from './Lobby';
 import { Results } from './Results';
-import { SoundSettings } from './SoundSettings';
+import { RoomMenu } from './RoomMenu';
 import { prettyUrl, Ticket } from './Ticket';
 
 export function ScreenView({ client, lobby, view }: { client: RoomClient; lobby: Lobby; view: unknown }) {
@@ -45,7 +45,7 @@ export function ScreenView({ client, lobby, view }: { client: RoomClient; lobby:
           )}
           <SelectedGame lobby={lobby} />
         </div>
-        <SoundSettings class="screen-settings" />
+        <RoomMenu client={client} lobby={lobby} placement="tv-corner" />
       </main>
     );
   }
@@ -68,19 +68,7 @@ export function ScreenView({ client, lobby, view }: { client: RoomClient; lobby:
         </span>
         {isHost && (
           <span class="rail-host">
-            {lobby.phase === 'playing' ? (
-              <>
-                <button type="button" class="btn btn-s" onClick={() => client.host({ type: 'skip' })}>
-                  Skip ahead
-                </button>
-                <ConfirmButton
-                  class="btn-s btn-ghost"
-                  label="End game"
-                  confirm="Click again to end"
-                  onConfirm={() => client.host({ type: 'returnToLobby' })}
-                />
-              </>
-            ) : (
+            {lobby.phase !== 'playing' && (
               <>
                 <button type="button" class="btn btn-s" onClick={() => client.host({ type: 'returnToLobby' })}>
                   Back to lobby
@@ -92,6 +80,24 @@ export function ScreenView({ client, lobby, view }: { client: RoomClient; lobby:
             )}
           </span>
         )}
+        <RoomMenu client={client} lobby={lobby} placement="tv-rail">
+          {(close) =>
+            isHost &&
+            lobby.phase === 'playing' && (
+              <>
+                <button type="button" class="btn btn-s btn-block" onClick={() => (client.host({ type: 'skip' }), close())}>
+                  Skip ahead
+                </button>
+                <ConfirmButton
+                  class="btn-s btn-block btn-ghost"
+                  label="End game"
+                  confirm="Click again to end"
+                  onConfirm={() => (client.host({ type: 'returnToLobby' }), close())}
+                />
+              </>
+            )
+          }
+        </RoomMenu>
       </footer>
     </main>
   );

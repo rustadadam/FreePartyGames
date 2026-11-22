@@ -10,6 +10,7 @@ import {
 } from '../shared/protocol';
 import type { LastResult, Lobby, LobbyPlayer, Phase, PlayerInfo, RoomMode, Viewer } from '../shared/types';
 import { normalizeCode } from '../shared/roomCode';
+import { clampSetting } from '../shared/settings';
 import type { AnyGame, GameCtx, GameRegistry } from './game';
 import { contentId } from './hash';
 import { Rng } from './rng';
@@ -78,6 +79,8 @@ export interface RoomSnapshot {
   screen: { token: string; away: boolean } | null;
   phase: Phase;
   selectedGameId: string | null;
+  /** The host's picks, per game id and setting key. Kept across games so each remembers its own. */
+  settings: Record<string, Record<string, number>>;
   game: GameRun | null;
   /** key -> dueAt. Keys: `g:<game key>`, `bot`, `leave:<playerId|screen>`. Insertion order breaks ties. */
   timers: Record<string, number>;
@@ -127,6 +130,7 @@ export class Room {
       screen: null,
       phase: 'lobby',
       selectedGameId: null,
+      settings: {},
       game: null,
       timers: {},
       lastResult: null,
@@ -144,6 +148,7 @@ export class Room {
 
   static restore(snapshot: RoomSnapshot, deps: RoomDeps, assets?: Iterable<[string, unknown]>): Room {
     const room = new Room(deps, structuredClone(snapshot));
+    room.s.settings ??= {}; // snapshots from before game settings
     for (const [id, data] of assets ?? []) room.assets.set(id, data);
     return room;
   }
@@ -258,6 +263,7 @@ export class Room {
       screenConnected: this.s.screen !== null && this.isConnected('screen'),
       phase: this.s.phase,
       selectedGameId: this.s.selectedGameId,
+      settings: this.lobbySettings(),
       currentGameId: this.s.game?.id ?? null,
       inGame: [...inGame],
       games: this.listedGames().map((g) => ({ ...g.manifest })),
@@ -265,6 +271,25 @@ export class Room {
       maxPlayers: MAX_PLAYERS,
       dev: !!this.deps.dev,
     };
+  }
+
+  /** The selected game's settings fields with their current values, or null when it has none. */
+  private lobbySettings(): Lobby['settings'] {
+    const def = this.s.selectedGameId ? this.deps.games[this.s.selectedGameId] : undefined;
+    if (!def?.settingsFields?.length) return null;
+    return {
+      gameId: def.manifest.id,
+      fields: def.settingsFields.map((f) => ({ ...f })),
+      values: this.settingsFor(def),
+    };
+  }
+
+  /** `defaultSettings` overlaid with the host's picks for this game, each re-clamped to its field. */
+  private settingsFor(def: AnyGame): Record<string, number> {
+    const out: Record<string, number> = structuredClone(def.defaultSettings);
+    const picks = this.s.settings[def.manifest.id] ?? {};
+    for (const f of def.settingsFields ?? []) if (f.key in picks) out[f.key] = clampSetting(f, picks[f.key]);
+    return out;
   }
 
   /** Entry point for every inbound socket message. Never throws on bad input. */
@@ -499,6 +524,14 @@ export class Room {
         this.s.selectedGameId = cmd.gameId;
         return null;
       }
+      case 'setSetting': {
+        if (this.s.phase === 'playing') return 'Change settings between games';
+        const def = this.s.selectedGameId ? this.deps.games[this.s.selectedGameId] : undefined;
+        const field = def?.settingsFields?.find((f) => f.key === cmd.key);
+        if (!def || !field) return 'Unknown setting';
+        (this.s.settings[def.manifest.id] ??= {})[field.key] = clampSetting(field, cmd.value);
+        return null;
+      }
       case 'start':
         return this.start();
       case 'skip': {
@@ -553,7 +586,7 @@ export class Room {
     this.s.phase = 'playing';
     this.s.game = { id: def.manifest.id, state: null, playerIds: players.map((p) => p.id), left: [] };
     const ok = this.callGame(() => {
-      this.s.game!.state = def.setup(this.ctx, players, structuredClone(def.defaultSettings));
+      this.s.game!.state = def.setup(this.ctx, players, this.settingsFor(def));
     });
     if (!ok) {
       // A crashed setup leaves no usable state: back to the lobby instead of a dead game.

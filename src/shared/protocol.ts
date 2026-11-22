@@ -29,6 +29,7 @@ export const ManifestSchema = z
 
 export const HostCmdSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('selectGame'), gameId: Id }).strict(),
+  z.object({ type: z.literal('setSetting'), key: Id, value: z.number().finite() }).strict(),
   z.object({ type: z.literal('start') }).strict(),
   z.object({ type: z.literal('skip') }).strict(),
   z.object({ type: z.literal('kick'), playerId: Id }).strict(),

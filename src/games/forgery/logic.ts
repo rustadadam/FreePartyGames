@@ -16,6 +16,7 @@ import { defineGame, type GameCtx } from '../../core/game';
 import { MAX_ID_LENGTH } from '../../shared/limits';
 import { makeDrawing, STROKE_UNITS, strokeBoxHeight, type Stroke } from '../../shared/strokes';
 import { StrokeSchema } from '../../shared/strokeSchema';
+import type { SettingField } from '../../shared/types';
 import { CATEGORIES } from './content';
 import { GUESS_WORDS, normalizeGuess } from './words';
 import { ASPECT, GUESS_MS, LAPS, MAX_PLAYERS, MAX_ROUNDS, MIN_PLAYERS, POINTS, REVEAL_MS, STROKE_W, TURN_MS, VOTE_MS } from './rules';
@@ -43,7 +44,14 @@ export type ForgeryAction = z.infer<typeof actionSchema>;
 export interface ForgerySettings {
   /** Upper bound on rounds; the game plays min(players, rounds). */
   rounds: number;
+  /** Seconds each player gets for their line. */
+  turnSeconds: number;
 }
+
+const settingsFields: SettingField[] = [
+  { key: 'rounds', label: 'Rounds', hint: 'One forger per round, at most one per player', min: 1, max: 6, step: 1 },
+  { key: 'turnSeconds', label: 'Drawing turn', hint: 'Time for each line', min: 10, max: 60, step: 5, unit: 's' },
+];
 
 export type Phase = 'draw' | 'vote' | 'guess' | 'reveal' | 'done';
 /** escaped: not accused. stolen: caught, guessed right. caught: caught, guessed wrong. void: round abandoned. */
@@ -62,6 +70,8 @@ export interface ForgeryState {
   /** Left the game (onPlayerLeave). The game never waits on them. */
   gone: string[];
   rounds: number;
+  /** Length of one drawing turn, in ms. */
+  turnMs: number;
   round: number;
   phase: Phase;
   /** Server ms the current phase ends at. */
@@ -90,6 +100,8 @@ export interface ForgeryView {
   phase: Phase;
   round: number;
   rounds: number;
+  /** Length of one drawing turn, for the timer ring. */
+  turnMs: number;
   deadline: number | null;
   /** Public: everyone, forger included, knows the category. */
   category: string;
@@ -176,8 +188,8 @@ function beginTurn(s: ForgeryState, ctx: GameCtx): void {
     s.turn++;
   }
   if (s.turn >= s.turns.length) return startVote(s, ctx);
-  s.deadline = ctx.now() + TURN_MS;
-  ctx.setTimer('turn', TURN_MS);
+  s.deadline = ctx.now() + s.turnMs;
+  ctx.setTimer('turn', s.turnMs);
 }
 
 function startVote(s: ForgeryState, ctx: GameCtx): void {
@@ -243,7 +255,8 @@ export default defineGame<ForgeryState, ForgeryAction, ForgerySettings>({
     screen: 'optional',
     estMinutes: 12,
   },
-  defaultSettings: { rounds: MAX_ROUNDS },
+  defaultSettings: { rounds: MAX_ROUNDS, turnSeconds: TURN_MS / 1000 },
+  settingsFields,
   actionSchema,
 
   setup(ctx, players, settings) {
@@ -254,6 +267,7 @@ export default defineGame<ForgeryState, ForgeryAction, ForgerySettings>({
       colors: Object.fromEntries(players.map((p) => [p.id, p.color])),
       gone: [],
       rounds: Math.max(1, Math.min(settings.rounds, ids.length)),
+      turnMs: settings.turnSeconds * 1000,
       round: 0,
       phase: 'draw',
       deadline: null,
@@ -356,6 +370,7 @@ export default defineGame<ForgeryState, ForgeryAction, ForgerySettings>({
       phase: s.phase,
       round: s.round,
       rounds: s.rounds,
+      turnMs: s.turnMs,
       deadline: s.deadline,
       category: CATEGORIES[s.category].title,
       players: s.playerIds,

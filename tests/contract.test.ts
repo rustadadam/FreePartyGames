@@ -6,6 +6,7 @@ import { clientGames } from '../src/games/registry.client';
 import { ManifestSchema } from '../src/shared/protocol';
 import { MAX_VIEW_BYTES } from '../src/shared/protocol';
 import { simulateGame } from '../src/core/testkit';
+import { clampSetting } from '../src/shared/settings';
 
 const SEEDS = [1, 2, 3];
 const MAX_STEPS = 50_000;
@@ -32,6 +33,14 @@ for (const [id, def] of Object.entries(serverGames)) {
       expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
       expect(def.manifest.minPlayers).toBeLessThanOrEqual(def.manifest.maxPlayers);
       expect(() => JSON.stringify(def.defaultSettings)).not.toThrow();
+    });
+
+    it('settings fields describe real settings, and every default fits its field', () => {
+      const defaults = def.defaultSettings as Record<string, unknown>;
+      for (const f of def.settingsFields ?? []) {
+        expect(f.key in defaults, `${f.key} is not in defaultSettings`).toBe(true);
+        expect(clampSetting(f, defaults[f.key] as number), `${f.key} default is outside its field`).toBe(defaults[f.key]);
+      }
     });
 
     for (const players of playerCounts(def.manifest.minPlayers, def.manifest.maxPlayers)) {

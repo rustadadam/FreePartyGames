@@ -9,16 +9,20 @@ function plate(v: Voice, f: number, at: number, vol: number, dur: number) {
 }
 
 export const play = defineSfx({
-  /** A plate nobody matched: one dull, short clink. */
-  clink: {
+  /** A word nobody matched: a sour two-note buzzer and a cracked-plate rattle. */
+  error: {
     gap: 150,
+    vary: 0.2,
     play(v) {
-      v.noise({ dur: 0.03, vol: 0.18, filter: 'highpass', freq: 5000 });
-      plate(v, 1240, 0, 0.16, 0.35);
+      v.noise({ dur: 0.05, vol: 0.2, filter: 'highpass', freq: 4000 });
+      v.tone({ f: 196, to: 150, type: 'sawtooth', dur: 0.22, vol: 0.2, lp: 1400 });
+      v.tone({ f: 207, to: 156, type: 'square', dur: 0.22, vol: 0.1, lp: 1200 });
+      v.tone({ f: 147, to: 98, type: 'sawtooth', at: 0.2, dur: 0.38, vol: 0.22, lp: 1100 });
+      v.tone({ f: 155, to: 104, type: 'square', at: 0.2, dur: 0.38, vol: 0.1, lp: 1000 });
     },
   },
   /**
-   * A witnessed plate: a chime that grows with the witnesses (Voice.n), one rising note per
+   * A matched word: a chime that grows with the witnesses (Voice.n), one rising note per
    * witness up to eight, ringing longer the more there are.
    */
   witness: {

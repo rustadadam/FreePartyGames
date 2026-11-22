@@ -7,6 +7,7 @@ export const MAX_PLAYERS = 20;
 export const MAX_ROUNDS = 4;
 export const LAPS = 2;
 
+/** Default drawing turn (the host can change it). */
 export const TURN_MS = 25_000;
 export const VOTE_MS = 30_000;
 export const GUESS_MS = 20_000;
