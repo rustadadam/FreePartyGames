@@ -1,6 +1,6 @@
 // QR code as crisp SVG, from the in-house encoder (no external service).
 import { useMemo } from 'preact/hooks';
-import { encodeQr, qrPath, type Ecc } from './qr';
+import { encodeQr, qrPath, type Ecc } from './qrEncode';
 
 export interface QRProps {
   /** Text to encode, usually the room link. */

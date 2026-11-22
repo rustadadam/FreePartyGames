@@ -228,7 +228,7 @@ Exports `DEFAULT_COLORS` and `DEFAULT_WIDTHS`.
 `paper="transparent"` for stickers.
 
 **`<QR value size? ecc? fg? bg? label? />`**: QR code as SVG from the in-house encoder
-(`kit/qr.ts`: byte mode, v1-10, verified against a decoder). No external service.
+(`kit/qrEncode.ts`: byte mode, v1-10, verified against a decoder). No external service.
 
 ### Hooks
 
