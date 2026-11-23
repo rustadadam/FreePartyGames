@@ -5,7 +5,7 @@ A game plugs in through one contract, `GameDefinition` in `src/core/game.ts`, an
 ## Steps
 
 1. **Copy the template.** `cp -r src/games/_template src/games/my-game`. The template is Tap Duel, a tiny reference game.
-2. **Set the manifest** in `logic.ts`: a unique kebab-case `id`, `title`, `tagline`, `minPlayers`, `maxPlayers`, `screen` (`'required' | 'optional' | 'none'`) and `estMinutes`. Leave out `hidden: true` (that flag only lists a game in dev builds).
+2. **Set the manifest** in `logic.ts`: a unique kebab-case `id`, `title`, `tagline`, `minPlayers`, `maxPlayers`, `screen` (`'required' | 'optional' | 'none'`) and `estMinutes`. Leave out `hidden: true` (that flag only lists a game in dev builds). `maxPlayers` is your game's own cap (at most 30, the room size): `setup` never gets more players than that, and players over it spectate your game and get no view.
 3. **Write the logic** in `logic.ts`. It stays pure TypeScript: no DOM, no Cloudflare, no `Math.random` or `Date.now` (use `ctx.rng` and `ctx.now()`).
    - `actionSchema`: a strict zod schema for every action a phone can send. Nothing reaches `onAction` without passing it.
    - `setup(ctx, players, settings)` returns the initial state. State must be plain JSON: it is snapshotted when the room hibernates.
@@ -55,12 +55,34 @@ Anything the host might want to tune (rounds, seconds per phase) is a setting. A
 
 Keep to a few settings per game: the ones a group would plausibly change (length of the game, time pressure). Not every game needs them.
 
+## Drafts (autosave)
+
+A half-typed word or half-finished drawing must not be lost when the timer runs out (principle 7 in `docs/DESIGN.md`). The engine re-projects every viewer's view on every action, so drafts are sent rarely and stay out of every view.
+
+**UI.** Call the kit hook next to the input; it sends only when the page is hidden and about 1.5 s before the deadline, and skips empty or unchanged values and anything after the real submit:
+
+```ts
+const [text, setText] = useState('');
+useDraft(text, (t) => send({ type: 'draft', text: t }), { deadline: view.deadline, enabled: !view.submitted });
+```
+
+**Logic.** The action is named `draft`; its fields are the game's own (`text`, `strokes`, ...).
+
+- **Same limits as the real submit.** Put `draft` in `actionSchema` and validate it with the same zod schema (max length, stroke caps) as the submit action. A draft is never a way around a limit.
+- **Never counts as done.** A draft does not lock the player in, does not change "who has answered" counts, and does not end a phase early. It fires no `lockIn` cue.
+- **Never in a view.** Store drafts in the state (e.g. `drafts: Record<playerId, Draft>`) and keep them out of every `view()`. The one allowed exception is the author's own view, to restore an input after a reload.
+- **On timeout, submit it.** When the phase ends on its timer (`onTimer`), run the normal submit path for every player who has a draft and no submission, then continue as usual. Ending early because everyone submitted needs no drafts. Skip a draft that fails the submit's own validation.
+- **Ignored when stale.** A draft that arrives after the player submitted, or in another phase, is ignored without error (like any stale action). Clear `drafts` when a phase begins.
+- **Latest wins.** Each draft replaces the player's previous one.
+
+The contract test's idle-player run never sends drafts; cover the timeout path in your game's own test (a draft, then `onTimer`, then check the submission exists and no view carried the draft). No shared helper is provided: the submit path differs per game, so the loop is two lines in each.
+
 ## What the contract test enforces
 
 For every registered game, with and without a screen:
 
 - the manifest is valid, and the server and client registries hold the same ids;
-- bots finish the game with the minimum, 8 and 20 players (clamped to the manifest), on 3 seeds;
+- bots finish the game with the minimum, 8, 20 and its own `maxPlayers` (clamped to the manifest), on 3 seeds, and once more with 30 players in the room (the engine seats only your `maxPlayers`; the rest spectate and get no view);
 - nothing throws, every view is JSON-serializable and at most 64 KB, and every action passed `actionSchema`;
 - at least two different players act;
 - with every player idle, the game still ends on its own timers, so give every phase a deadline;

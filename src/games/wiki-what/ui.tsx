@@ -1,6 +1,6 @@
 // Wiki-what UI. Motif: the footnote. Choices carry superscript markers, sources are cited in mono
 // under a hairline, and the Mole is marked with a "citation needed" bracket.
-import { Avatar, PlayerChip, PromptCard, RevealStage, RulesSheet, Timer, Vote, playerOf, sfx, useSfxCount, useSfxCue } from '../../client/kit';
+import { Avatar, PointsNote, RevealStage, RoleCard, RulesSheet, Timer, Vote, playerOf, sfx, useSfxCount, useSfxCue } from '../../client/kit';
 import type { ClientGameModule, PlayerProps, ScreenProps } from '../../client/gameModule';
 import type { Lobby } from '../../shared/types';
 // Type-only imports from logic.ts: a value import would pull zod and the game logic into this chunk.
@@ -9,7 +9,7 @@ import { play } from './sfx';
 import './ui.css';
 
 const MARKS = ['[1]', '[2]', '[3]', '[4]'];
-const TOTAL_MS = { accuse: 25_000, reveal: 8_000, moleReveal: 10_000 } as const;
+const TOTAL_MS = { role: 5_000, accuse: 25_000, reveal: 8_000, moleReveal: 10_000 } as const;
 
 /** Sound (room audio device only): a tick per answer or accusation; the Mole sting, then points. */
 function useWikiCues(view: WikiView) {
@@ -51,19 +51,23 @@ function Choice({
   state,
   onPick,
   count,
+  tip,
 }: {
   i: number;
   text: string;
   state: 'open' | 'mine' | 'locked' | 'right' | 'wrong' | 'team';
   onPick?: () => void;
   count?: number;
+  /** A small sticker on the card's corner. */
+  tip?: string;
 }) {
+  const tag = [tip, state === 'mine' ? 'Your pick' : null].filter(Boolean).join(' · ');
   return (
     <button type="button" class={`ww-choice is-${state}`} disabled={state !== 'open'} onClick={onPick} aria-pressed={state === 'mine'}>
       <sup class="ww-mark">{MARKS[i]}</sup>
       <span class="ww-choice-text">{text}</span>
       {count !== undefined && <span class="ww-count">{count}</span>}
-      {state === 'mine' && <span class="ww-tag">Your pick</span>}
+      {tag && <span class={`ww-tag${tip ? ' is-tip' : ''}`}>{tag}</span>}
     </button>
   );
 }
@@ -96,7 +100,7 @@ function ResolvedChoices({ view, me, onlyMine }: { view: WikiView; me?: string; 
   );
 }
 
-function Verdict({ view, lobby, size }: { view: WikiView; lobby: Lobby; size?: 'l' }) {
+function Verdict({ view, lobby, size, votes = true }: { view: WikiView; lobby: Lobby; size?: 'l'; votes?: boolean }) {
   const r = view.reveal!;
   const items = [
     <p class="ww-verdict" key="pick">
@@ -116,20 +120,22 @@ function Verdict({ view, lobby, size }: { view: WikiView; lobby: Lobby; size?: '
         interval={1300}
         sound={(i) => (i === 1 ? play(r.right ? 'right' : 'wrong') : sfx.play('reveal'))}
       />
-      <ul class="ww-votes">
-        {view.q!.choices.map((c, i) =>
-          voters(i).length ? (
-            <li key={i}>
-              <sup class="ww-mark">{MARKS[i]}</sup>
-              {voters(i).map((p) => (
-                <span key={p} class="ww-vp">
-                  {playerOf(lobby, p)?.name ?? '?'}
-                </span>
-              ))}
-            </li>
-          ) : null,
-        )}
-      </ul>
+      {votes && (
+        <ul class="ww-votes">
+          {view.q!.choices.map((c, i) =>
+            voters(i).length ? (
+              <li key={i}>
+                <sup class="ww-mark">{MARKS[i]}</sup>
+                {voters(i).map((p) => (
+                  <span key={p} class="ww-vp">
+                    {playerOf(lobby, p)?.name ?? '?'}
+                  </span>
+                ))}
+              </li>
+            ) : null,
+          )}
+        </ul>
+      )}
       <p class="ww-cite">
         Source: Wikipedia, "{r.article}"{r.fact ? <span class="ww-fact"> {r.fact}</span> : null}
       </p>
@@ -137,28 +143,12 @@ function Verdict({ view, lobby, size }: { view: WikiView; lobby: Lobby; size?: '
   );
 }
 
-function Standings({ view, lobby, me, size }: { view: WikiView; lobby: Lobby; me?: string; size?: string }) {
-  const sc = view.scores ?? {};
-  const ids = Object.keys(sc).sort((a, b) => sc[b] - sc[a]);
-  return (
-    <RevealStage
-      class="ww-standings"
-      items={ids.map((id) => (
-        <PlayerChip key={id} lobby={lobby} id={id} you={id === me} trailing={sc[id]} size={size} />
-      ))}
-      interval={120}
-      sound={false}
-    />
-  );
-}
-
 function MoleReveal({ view, lobby, me, big }: { view: WikiView; lobby: Lobby; me?: string; big?: boolean }) {
   const e = view.roundEnd!;
   const mole = playerOf(lobby, e.mole);
-  const accusers = Object.keys(e.accuse).filter((p) => e.accuse[p] === e.mole);
   return (
     <div class="g-stack ww-mole">
-      <p class="eyebrow">{view.phase === 'done' ? 'Final round' : `End of round ${view.round}`}</p>
+      <p class="eyebrow">End of round {view.round}</p>
       <div class="ww-bracket">
         <Avatar name={mole?.name ?? '?'} color={mole?.color ?? '#9aa5b1'} size={big ? '12vh' : '72px'} />
         <div>
@@ -167,43 +157,45 @@ function MoleReveal({ view, lobby, me, big }: { view: WikiView; lobby: Lobby; me
         </div>
       </div>
       <p class={`ww-verdict ${e.caught ? 'is-right' : 'is-wrong'}`}>
-        {e.caught
-          ? `Mole caught. The team earns 3 points${accusers.length ? `, and the ${accusers.length} player${accusers.length > 1 ? 's' : ''} who accused them earn 1 each` : ''}.`
-          : 'Mole not caught. The Mole earns 3 points.'}
+        {e.caught ? 'Mole caught. The team earns 3 points.' : 'Mole not caught. The Mole earns 3 points.'}
       </p>
-      <Standings view={view} lobby={lobby} me={me} size={big ? '5vh' : undefined} />
     </div>
+  );
+}
+
+/** The role card: same words, same length, same layout for everyone (the Mole's differ only in content). */
+function Role({ view }: { view: WikiView }) {
+  const mole = !!view.you?.mole;
+  return (
+    <RoleCard
+      eyebrow={`Round ${view.round} of ${view.rounds} · your role`}
+      role={mole ? 'You are the Mole' : 'You are on the team'}
+      detail={mole ? "You'll see each right answer. Steer the team away from it." : 'Pick the right answers. One of you is secretly the Mole.'}
+      deadline={view.deadline}
+      total={TOTAL_MS.role}
+    />
   );
 }
 
 function Player({ view, send, lobby, me }: PlayerProps<WikiView, WikiAction>) {
   useWikiCues(view);
   const you = view.you;
-  const mole = !!you?.mole;
   const room = lobby.screenConnected;
   const q = view.q;
   const others = view.players.filter((p) => p !== me);
+  const waiting = Math.max(0, view.players.length - view.gone.length - view.voted.length);
+
+  if (view.phase === 'role') return <section class="g-stack ww-player">{you ? <Role view={view} /> : <p class="g-muted">Waiting for the round to start.</p>}</section>;
+
   return (
     <section class="g-stack ww-player">
       <Header view={view} />
 
       {view.phase === 'ask' && q && (
         <>
-          {/* Everyone gets the same compact hidden card, so a glance at a phone cannot spot the Mole's. */}
-          {you && (
-            <PromptCard key={`${view.round}-${view.qi}`} secret hidden eyebrow="Your role this round" class="ww-role">
-              {mole && you.answerIndex !== undefined ? (
-                <>
-                  You are the Mole. The right answer is {MARKS[you.answerIndex]} {q.choices[you.answerIndex]}. Get the team to pick a different one, without getting caught.
-                </>
-              ) : (
-                'You are on the team. Pick the right answer. One player is the Mole, and wants you to get it wrong.'
-              )}
-            </PromptCard>
-          )}
+          <p class="g-muted">{you?.pick != null ? `Locked in. Waiting for ${waiting} more.` : 'Pick an answer. The most popular pick becomes the team answer.'}</p>
           <div class="g-panel ww-q">
             <p class="ww-q-text">{q.text}</p>
-            <p class="ww-cite">The source shows after everyone answers</p>
           </div>
           <div class="ww-choices">
             {q.choices.map((c, i) => (
@@ -212,49 +204,46 @@ function Player({ view, send, lobby, me }: PlayerProps<WikiView, WikiAction>) {
                 i={i}
                 text={c}
                 state={you?.pick === i ? 'mine' : you?.pick != null ? 'locked' : 'open'}
+                // Only the Mole's view carries this: the right answer, tagged on the card itself.
+                tip={you?.answerIndex === i ? 'Right answer' : undefined}
                 onPick={() => send({ type: 'pick', choice: i })}
               />
             ))}
           </div>
-          <p class="g-muted">
-            {you?.pick != null
-              ? `Answer locked in. Waiting for ${Math.max(0, view.players.length - view.gone.length - view.voted.length)} more.`
-              : 'Pick an answer. The most popular pick becomes the team answer.'}
-          </p>
           {!room && <Pills ids={view.players} lobby={lobby} voted={view.voted} size="28px" />}
         </>
       )}
 
       {view.phase === 'reveal' && q && view.reveal && (
         <>
-          <div class="g-panel ww-q">
-            <p class="ww-q-text">{q.text}</p>
-          </div>
+          {!room && (
+            <div class="g-panel ww-q">
+              <p class="ww-q-text">{q.text}</p>
+            </div>
+          )}
           <ResolvedChoices view={view} me={me} onlyMine />
-          <Verdict view={view} lobby={lobby} />
+          <Verdict view={view} lobby={lobby} votes={!room} />
+          <PointsNote lines={you?.note ?? []} />
         </>
       )}
 
       {view.phase === 'accuse' && (
         <>
-          <h2 class="g-title">Who was the Mole?</h2>
-          <p class="g-muted">One player was the Mole. Accuse who you think it was. The player with the most accusations is caught.</p>
+          <h2 class="g-title">Who is the Mole?</h2>
           <Vote
-            label="Who was the Mole?"
+            label="Who is the Mole?"
             value={you?.accused ?? null}
             onVote={(id) => send({ type: 'accuse', target: id })}
             options={others.map((id) => ({ id, label: playerOf(lobby, id)?.name ?? '?', color: playerOf(lobby, id)?.color }))}
           />
-          <p class="g-muted">
-            {view.voted.length} of {view.players.length - view.gone.length} accused
-          </p>
+          {you?.accused != null && <p class="g-muted">Locked in. Waiting for {waiting} more.</p>}
         </>
       )}
 
-      {(view.phase === 'moleReveal' || view.phase === 'done') && view.roundEnd && (
+      {view.phase === 'moleReveal' && view.roundEnd && (
         <>
-          {view.phase === 'done' && <h2 class="g-title">Game over</h2>}
           <MoleReveal view={view} lobby={lobby} me={me} />
+          <PointsNote lines={you?.note ?? []} />
         </>
       )}
     </section>
@@ -267,6 +256,11 @@ function Screen({ view, lobby }: ScreenProps<WikiView>) {
   return (
     <section class="g-stack ww-screen">
       <Header view={view} big />
+      {view.phase === 'role' && (
+        <div class="g-center">
+          <h2 class="g-call">Check your phone for your role</h2>
+        </div>
+      )}
       {view.phase === 'ask' && q && (
         <div class="ww-stage">
           <div class="ww-q ww-q-l">
@@ -292,14 +286,13 @@ function Screen({ view, lobby }: ScreenProps<WikiView>) {
       )}
       {view.phase === 'accuse' && (
         <div class="g-center">
-          <h2 class="g-call">Who was the Mole?</h2>
-          <p class="g-muted">Accuse a player on your phone. The player with the most accusations is caught.</p>
+          <h2 class="g-call">Who is the Mole?</h2>
+          <p class="g-muted">Accuse a player on your phone.</p>
           <Pills ids={view.players} lobby={lobby} voted={view.voted} size="9vh" />
         </div>
       )}
-      {(view.phase === 'moleReveal' || view.phase === 'done') && view.roundEnd && (
+      {view.phase === 'moleReveal' && view.roundEnd && (
         <div class="g-center">
-          {view.phase === 'done' && <h2 class="g-call">Game over</h2>}
           <MoleReveal view={view} lobby={lobby} big />
         </div>
       )}
@@ -312,10 +305,12 @@ function Rules() {
     <RulesSheet
       story="In the strangest corners of Wikipedia, there is a quiz your team has to pass. You are all working together, except for one of you. The Mole already knows the answers, and wants you to get them wrong."
       how={[
-        'Each round, the team answers strange-but-true questions from Wikipedia. Everyone picks an answer.',
+        'Each round opens with a secret role card on your phone: you are on the team, or you are the Mole. Check it, then keep your face still.',
+        'The team answers strange-but-true questions from Wikipedia. Everyone picks an answer.',
         'The team answer is the most popular pick. If it is tied, the choice locked in first wins.',
-        'One player each round is secretly the Mole. The Mole sees the right answer, and wants the team to get it wrong.',
+        'The Mole sees the right answer, marked on their own screen, and wants the team to get it wrong.',
         'At the end of the round, everyone accuses a player. The Mole accuses someone too, to blend in, but that accusation does not count. The player with the most accusations is caught. If it is tied, nobody is.',
+        'After each answer and each Mole reveal, your phone lists where your points came from.',
       ]}
       scoring={[
         'The team answers right: 2 team points, plus 1 for each player who picked it',

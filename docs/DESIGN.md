@@ -24,8 +24,9 @@ Everything else stays quiet so the ticket is what people remember.
 
 ## Palette
 
-The 20 player colors (set by the engine, `PLAYER_COLORS`) include white, yellow and grey, so
-the shell is dark: every player color has to read on it. The dark is a grape night rather than
+The 30 player colors (set by the engine, `PLAYER_COLORS`, one per seat in a room of 30) include white,
+yellow and grey, so the shell is dark: every player color has to read on it (4.5:1 or better, and the
+initial on it too), and no two are closer than 0.08 in OKLab (`tests/engine.test.ts`). The dark is a grape night rather than
 neutral black, so the neon-on-black look stays free for Cave Rave.
 
 | Token | Hex | Name | Use |
@@ -42,6 +43,8 @@ Semantic aliases (use these in components, not the raw names): `--bg`, `--surfac
 `--surface-2`, `--line`, `--text`, `--muted`, `--accent`, `--accent-ink` (text on accent),
 `--accent-2`, `--highlight`, `--danger`, `--ok`. A game re-skins by overriding `--accent`,
 `--accent-ink`, `--accent-2` and `--stage` (see **Games**).
+
+Podium steps use three medal tokens, only on the results page: `--gold` `#FFD447` (= marquee), `--silver` `#CFD6EA`, `--bronze` `#E09A62`.
 
 Contrast: chalk on night 16:1, haze on night 7.6:1, night on raffle 6.3:1, night on marquee 12:1.
 
@@ -94,7 +97,7 @@ can still join.
 ```
 Lobby                                   In game
 +--------------+----------------------+ +-------------------------------------+
-|  ~~TICKET~~  |  Who's here (6/20)   | |                                     |
+|  ~~TICKET~~  |  Who's here (6/30)   | |                                     |
 |   A B C D    |  (A)(B)(C)(D)(E)(F)  | |          game stage                 |
 |  [QR] stub   |                      | |                                     |
 |  site/ABCD   |  Next up: Tap Duel   | +-------------------------------------+
@@ -109,6 +112,52 @@ join, and the same easing drives `RevealStage`. Everything else is a 150 ms fade
 **Quality floor.** Visible focus (`--marquee` 3px outline, offset 3px) on every interactive
 element; safe-area insets on all four sides; `touch-action: manipulation` on controls (no
 double-tap zoom); `touch-action: none` only on drawing surfaces.
+
+## UI principles: keep every page simple
+
+A phone is held in one hand, in a loud room, by someone half-listening. Every page has to be
+understood in one glance. Check each screen against these before shipping it.
+
+1. **One job per page.** A phone page asks for one thing: one input, one choice, or one tap.
+   If a page needs two jobs, it is two phases.
+2. **One primary action, docked.** The single main button sits in the dock at the bottom.
+   Secondary actions go in the gear menu or stay small and quiet.
+3. **Say what to do once, in plain words.** One short instruction line at the top ("Draw a
+   pancake", "Tap the words someone matched"). Rules and explanations live in the Rules sheet,
+   not on the play page.
+4. **Show only what this player needs now.** Your own things on your phone; shared things on
+   the TV. A phone shows shared state only when no TV is connected.
+5. **Count the things on the page.** Under the header, a phone page holds at most about five
+   distinct elements (instruction, card, input, footer, button). If it holds more, cut or split it.
+6. **Points always come with a reason.** When a player earns points, show where they came from
+   in a small `PointsNote` footer ("+3 · pizza matched"). One line per source, never a table.
+7. **Never lose work.** A half-typed word or half-finished drawing is submitted when time runs
+   out (see **Drafts** in `docs/ADDING_A_GAME.md` and `useDraft` under **Kit**).
+8. **Secrets are shown privately, first.** A hidden-role game opens each round with a 5-second
+   `RoleCard` on every phone, the same layout for every role, so a glance cannot spot the odd one out.
+9. **The shell owns the ending.** Every game ends on the shell's podium (top three) and then the
+   full ranking on every phone. A game does not build its own final-standings page.
+10. **Works from 3 to 30.** Player lists, walls and vote grids wrap. Nothing assumes a fixed count.
+
+## Results: the podium
+
+Every game ends on the shell's results page (`src/client/app/Results.tsx`); a game never draws its
+own. Both views show the same thing in the same order.
+
+- **Podium.** The top three places as steps, 2nd - 1st - 3rd left to right, each with the avatar,
+  name and this game's points. The steps rise 3rd, 2nd, then 1st (the `reveal` cue per step and
+  `score` on 1st, after the shell's `fanfare`); the winner line and the ranking wait for 1st. Under
+  `prefers-reduced-motion` everything is instant and silent.
+- **Places are dense.** Equal scores share a place and the next score is the next place (1, 1, 2),
+  so a tie stacks its players on one step and no step is ever empty. Past 4 players on a step
+  (6 on the TV) it shows "+n". Places with 0 points get no step; with fewer than three scorers the
+  podium has fewer steps; when nobody scored there is no podium, the headline says "Nobody scored"
+  and the places show "-".
+- **Phone** (portrait): podium, then the whole ranking for every player (this game's points, room
+  total), your row highlighted with "(you)". Scrolls for 30 players.
+- **TV** (landscape): the heading on the left, the podium on the right, and under them only the
+  players who are not on the podium, in 1 to 4 columns so 30 players fit at 1080p without
+  scrolling. The summary line stays under the headline.
 
 ## Plan review
 
@@ -132,10 +181,10 @@ says which game this is. Draw it with CSS or SVG in the game's folder; keep it t
 |---|---|---|---|---|
 | Forgery (`forgery`) | Gilt `#E9B949` | Seal red `#E5484D` | `#221A33` | The gallery frame: the shared canvas sits in a double gilt frame with a brass name plate. The reveal stamps a red wax seal reading FORGED on the forger's punch. |
 | Comic Strip Club (`comic-strip-club`) | Process cyan `#36C5F4` | Process yellow `#FFE14D` | `#1C1A3A` | Halftone dots and thick ink gutters: panels are white paper (`#FFFDF7`) in 3-up strips with 6px ink (`#14101F`) gutters; prompts sit in speech-tail captions. |
-| Cracked Cookbook (`cracked-cookbook`) | Yolk `#FFB020` | Basil `#6CCB5F` | `#2A1A2E` | The recipe card and tape: drawings sit on index cards with a torn masking-tape corner; props become die-cut stickers (white 4px outline, soft drop shadow). |
+| Cracked Cookbook (`cracked-cookbook`) | Yolk `#FFB020` | Basil `#6CCB5F` | `#2A1A2E` | The recipe card and tape: drawings sit on index cards with a torn masking-tape corner; props become die-cut stickers (white 4px outline, soft drop shadow) on a gingham plate; the cook only places stickers and names the dish. |
 | Wiki-what (`wiki-what`) | Hyperlink `#7AA2FF` | Mole earth `#C58B5A` | `#17183A` | The footnote: answers carry superscript markers `[1] [2] [3]`, sources are cited in `--font-mono` under a hairline, and the Mole is marked with a "citation needed" bracket. |
 | Cave Rave (`cave-rave`) | Ultraviolet `#B76CFF` | Glowstick `#3DFFB5` | `#0B0716` | Three glowing lanes under a stalactite zigzag edge. The only game allowed glow (`box-shadow` blooms) and a near-black stage. Sabotage effects (fog, mirror, wobble) are full-lane overlays in `--accent-2`. |
-| Second Witness (`second-witness`) | Plate gold `#D8A647` | Verdigris `#63D2BD` | `#261820` | The gold plate: the prompt is a chapter heading engraved on a riveted gold plate, answers are numbered like verses ("3:1", "3:2"), witness counts are small verdigris marks on the plate (an unmatched plate is left tarnished), and a temple silhouette sits faintly behind the prompt. The score multiplier is a gold coin in the header. |
+| Second Witness (`second-witness`) | Plate gold `#D8A647` | Verdigris `#63D2BD` | `#261820` | The gold plate: the prompt is a chapter heading ("Chapter 42") engraved on a riveted gold plate, your own answers are numbered like verses ("42:1", "42:2") on plates of their own, a word you tapped as matched turns verdigris with a check mark (an untapped plate stays gold), and a temple silhouette sits faintly behind the prompt. |
 | Tap Duel (`tap-duel`, dev template) | Raffle (default) | Marquee (default) | Velvet | None: it is the plain reference. |
 
 If a game's final id differs from the table, rename the selector in `tokens.css`; don't add a
@@ -146,7 +195,7 @@ second one.
 Everything below is exported from `src/client/kit/index.ts`:
 
 ```ts
-import { Timer, Vote, PromptCard, DrawingCanvas, StrokeView, PlayerChip, useAssets } from '../../client/kit';
+import { Timer, Vote, PromptCard, RoleCard, PointsNote, DrawingCanvas, StrokeView, PlayerChip, useAssets, useDraft } from '../../client/kit';
 ```
 
 Kit styles load once with the shell; a game never imports kit CSS. Preview every component
@@ -193,6 +242,23 @@ a prompt, category or word sits on (display face, punched corner). `secret` adds
 toggle against shoulder-surfing (`hidden` starts it hidden). `tone="accent"` fills it with the
 game accent. `size="l"` for screen prompts. `footer` is a mono footnote line (citations). It flicks
 (`card`) when it appears, unless `quiet`.
+
+**`<RoleCard eyebrow? role detail? deadline? total? />`**: the full-page private card that opens a
+round of a hidden-role game (principle 8). `role` is the big call ("You are the Forger"), `eyebrow`
+the small line above it ("Round 2 · your role"), `detail` one plain line under the card (the word, or
+what to do). `deadline` (server ms) + `total` (ms) draw a quiet progress bar so the player sees it
+moves on by itself. There is deliberately no tone or style prop: every role renders with the same
+layout, size and colors, so keep each role's text a similar length. Games add a 5-second `role` phase
+and render this in it; the TV shows a neutral "Check your phone" instead. Forgery is the reference
+use: detail `Category: X · Word: Y` for artists and `Category: X · Word: none` for the forger, so both
+cards have the same structure.
+
+**`<PointsNote lines total? size? />`**: the small "where did my points come from" footer
+(principle 6). `lines: { pts, why }[]`, one line per source (`+3 pizza matched`); `total` adds a
+closing Total line. Renders nothing for an empty list. Put it as the last child of the page body, just
+above the dock. `size="l"` for the TV. Never a table. Compute the lines in `logic.ts` and put
+only the viewer's own lines in that viewer's view (e.g. `you.earned`); a line that names a secret role
+waits until that role is revealed.
 
 **`<RulesSheet story how scoring? note? />`**: the body of every game's `Rules`. `story` is one
 scene-setting paragraph in the storyteller's voice; `how` is the steps of play, in order; `scoring`
@@ -250,6 +316,7 @@ Exports `DEFAULT_COLORS` and `DEFAULT_WIDTHS`.
 | `useServerNow(everyMs = 250)` | Server ms, re-rendering on an interval (0 = no ticking). |
 | `useAssets(ids)` | The page-wide asset map. Missing ids are requested once (batched, shared across games and rooms, since ids are content hashes) and appear when they arrive. The `assets` prop that `Player` and `Screen` receive is the same map. |
 | `useAsset<T>(id)` | One asset, or `undefined` while loading. |
+| `useDraft(value, send, opts?)` | Autosave for half-typed text or a half-finished drawing, without server load. Calls `send(value)` only when the page is hidden (`visibilitychange` / `pagehide`) and once `leadMs` (default 1500) before the server-time `deadline`, skipping an empty value, an unchanged one, `enabled: false` (already submitted) and anything after unmount. `opts`: `{ deadline?, enabled?, leadMs?, isEmpty? }`. The game side is in `docs/ADDING_A_GAME.md`, **Drafts (autosave)**. |
 | `useEphemeral(handler)` | Subscribes to `ephemeral` messages (live, unstored traffic) while mounted. |
 
 ### Sound
@@ -333,7 +400,7 @@ sit just under the music. Audition everything on `/dev/kit.html` (Sounds).
 | Comic Strip Club | `flip` (each panel in the reveal), `rimshot` (the tally) |
 | Cracked Cookbook | `serve` (service bell: a dish submitted, each dish revealed), `sticker` (a prop placed) |
 | Wiki-what | `right` / `wrong` (the answer), `mole` (the Mole unmasked) |
-| Second Witness | `error` (a word nobody matched), `witness` (a chime with one note per witness) |
+| Second Witness | `witness` (a chime when you tap a word as matched) |
 | Cave Rave | `advance` (the bracket moves on), `sabotage` (TV only, during the song) |
 
 Cave Rave's phones make the music, so every effect is held during the song; only the TV's

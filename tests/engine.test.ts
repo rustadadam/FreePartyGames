@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createHarness, findLeaks, recordViews } from '../src/core/testkit';
-import { Room, LEAVE_GRACE_MS, MAX_ASSETS_MSG_BYTES, MAX_PLAYERS } from '../src/core/engine';
+import { Room, LEAVE_GRACE_MS, MAX_ASSETS_MSG_BYTES, MAX_PLAYERS, PLAYER_COLORS } from '../src/core/engine';
 import type { AnyGame } from '../src/core/game';
 import tapDuel, { type TapState } from '../src/games/_template/logic';
 import { CODE_ALPHABET, generateCode, isValidCode, normalizeCode } from '../src/shared/roomCode';
 import { MAX_MESSAGE_BYTES } from '../src/shared/protocol';
+import { planSeats } from '../src/shared/seating';
+import { inkOn } from '../src/client/kit/Avatar';
 import { Rng } from '../src/core/rng';
 
 const GAME = 'tap-duel';
@@ -86,6 +88,7 @@ describe('joining and reconnecting', () => {
   });
 
   it('caps the room at MAX_PLAYERS players plus one screen', () => {
+    expect(MAX_PLAYERS).toBe(30);
     const h = createHarness();
     const screen = h.join('TV', { role: 'screen' });
     h.send(screen, { type: 'host', cmd: { type: 'addBots', count: MAX_PLAYERS } });
@@ -428,5 +431,184 @@ describe('game settings', () => {
     expect(host.last('error')?.code).toBe('bad_command'); // not while a game is running
     h.send(host, { type: 'host', cmd: { type: 'returnToLobby' } });
     expect(h.lobby().settings!.values.rounds).toBe(5);
+  });
+});
+
+
+// ---- the room holds 30; each game keeps its own cap; the rest spectate ----
+
+/** WCAG relative luminance of #rrggbb. */
+function luminance(hex: string): number {
+  const n = parseInt(hex.slice(1), 16);
+  const lin = (c: number) => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+}
+const contrast = (a: string, b: string) => {
+  const [x, y] = [luminance(a), luminance(b)];
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+};
+/** Perceptual distance (OKLab) between two seat colors. */
+function okDistance(a: string, b: string): number {
+  const lab = (hex: string) => {
+    const n = parseInt(hex.slice(1), 16);
+    const lin = (c: number) => ((c / 255) <= 0.04045 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+    const [r, g, bl] = [lin((n >> 16) & 255), lin((n >> 8) & 255), lin(n & 255)];
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * bl);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * bl);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * bl);
+    return [
+      0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+    ];
+  };
+  const [p, q] = [lab(a), lab(b)];
+  return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+}
+
+/** Screen + `n` human players (joined in order p1..pn; p1 is first seat) with the 20-cap template selected. */
+function bigRoom(n: number) {
+  const h = createHarness();
+  const tv = h.join('TV', { role: 'screen' });
+  const players = Array.from({ length: n }, (_, i) => h.join(`Player ${i + 1}`));
+  h.send(tv, { type: 'host', cmd: { type: 'selectGame', gameId: GAME } });
+  return { h, tv, players };
+}
+
+describe('30 players in the room', () => {
+  it('has a seat color for every seat: distinct, readable on the night background, with readable initials', () => {
+    expect(PLAYER_COLORS.length).toBeGreaterThanOrEqual(MAX_PLAYERS);
+    expect(new Set(PLAYER_COLORS).size).toBe(PLAYER_COLORS.length);
+    for (const c of PLAYER_COLORS) {
+      expect(contrast(c, '#1a1033'), `${c} on the night background`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(c, inkOn(c)), `initial on ${c}`).toBeGreaterThanOrEqual(4.5);
+    }
+    for (let i = 0; i < MAX_PLAYERS; i++)
+      for (let j = i + 1; j < MAX_PLAYERS; j++)
+        expect(okDistance(PLAYER_COLORS[i], PLAYER_COLORS[j]), `${PLAYER_COLORS[i]} vs ${PLAYER_COLORS[j]}`).toBeGreaterThan(0.08);
+  });
+
+  it('30 players get 30 distinct colors', () => {
+    const { h } = bigRoom(MAX_PLAYERS);
+    const colors = h.lobby().players.map((p) => p.color);
+    expect(colors).toHaveLength(30);
+    expect(new Set(colors).size).toBe(30);
+  });
+
+  it('the lobby message at 30 players with a finished game stays well under the message cap', () => {
+    const { h, players } = bigRoom(MAX_PLAYERS);
+    h.room.runHostCommand({ type: 'start' });
+    h.runUntil(() => h.lobby().phase === 'results');
+    const bytes = JSON.stringify(h.room.getLobby()).length;
+    expect(bytes).toBeLessThan(MAX_MESSAGE_BYTES / 4);
+  });
+
+  it('starting a 20-cap game seats exactly 20 (the host-player included); the other 10 spectate', () => {
+    const cap = tapDuel.manifest.maxPlayers;
+    const h = createHarness();
+    const host = h.join('Host');
+    const rest = Array.from({ length: 29 }, (_, i) => h.join(`P${i + 1}`));
+    h.send(host, { type: 'host', cmd: { type: 'selectGame', gameId: GAME } });
+    h.send(host, { type: 'host', cmd: { type: 'start' } });
+    expect(host.last('error')).toBeUndefined();
+    const lobby = h.lobby();
+    expect(lobby.phase).toBe('playing');
+    expect(lobby.players).toHaveLength(30);
+    expect(lobby.inGame).toHaveLength(cap);
+    expect(lobby.inGame).toContain(host.id);
+    expect(lobby.inGame).toEqual(lobby.players.slice(0, cap).map((p) => p.id)); // seat order
+    h.step();
+    h.step();
+    for (const c of [host, ...rest.slice(0, cap - 1)]) expect(c.view(), c.id).not.toBeNull();
+    for (const c of rest.slice(cap - 1)) {
+      expect(c.view(), c.id).toBeNull();
+      expect(c.last('error')).toBeUndefined();
+      h.send(c, { type: 'action', payload: { type: 'tap' } });
+      expect(c.last('error')?.code).toBe('not_in_game');
+    }
+  });
+
+  it('away players do not take a seat from present ones; disconnected-in-grace ones come last', () => {
+    const { h, players } = bigRoom(22);
+    const cap = tapDuel.manifest.maxPlayers;
+    // p2 is gone for good; p3's socket just dropped (still inside the grace period)
+    players[1].disconnect();
+    h.clock.advance(LEAVE_GRACE_MS + 1);
+    h.room.fireDueTimers();
+    players[2].disconnect();
+    h.room.runHostCommand({ type: 'start' });
+    const seated = h.lobby().inGame;
+    expect(seated).toHaveLength(cap);
+    expect(seated).not.toContain(players[1].id);
+    expect(seated).not.toContain(players[2].id);
+    expect(seated).toContain(players[20].id); // late seats that would have missed out in plain order
+    expect(seated).toContain(players[21].id);
+  });
+
+  it('after the game everyone is back for the next one: spectators get the seats the first group gives up', () => {
+    const { h, players } = bigRoom(MAX_PLAYERS);
+    h.room.runHostCommand({ type: 'start' });
+    const first = h.lobby().inGame;
+    const watchers = h.lobby().players.map((p) => p.id).filter((id) => !first.includes(id));
+    expect(watchers).toHaveLength(10);
+    h.runUntil(() => h.lobby().phase === 'results');
+    const ranked = h.lobby().lastResult!.ranking;
+    expect(ranked.sort()).toEqual([...first].sort()); // spectators are not in the result
+    h.room.runHostCommand({ type: 'returnToLobby' });
+    expect(h.lobby().inGame).toEqual([]);
+    expect(h.lobby().players).toHaveLength(30);
+    // the first 12 players leave for good
+    for (const c of players.slice(0, 12)) {
+      c.disconnect();
+    }
+    h.clock.advance(LEAVE_GRACE_MS + 1);
+    h.room.fireDueTimers();
+    h.room.runHostCommand({ type: 'start' });
+    const second = h.lobby().inGame;
+    expect(second).toHaveLength(18);
+    for (const id of watchers) expect(second).toContain(id);
+  });
+});
+
+describe('planSeats', () => {
+  const mk = (id: string, o: Partial<{ isBot: boolean; isHost: boolean; connected: boolean; away: boolean }> = {}) => ({
+    id,
+    isBot: false,
+    isHost: false,
+    connected: true,
+    away: false,
+    ...o,
+  });
+  const ids = (xs: { id: string }[]) => xs.map((x) => x.id);
+
+  it('seats everyone, in seat order, when the game fits', () => {
+    const ps = [mk('a'), mk('b'), mk('c')];
+    const plan = planSeats(ps, 5);
+    expect(ids(plan.seated)).toEqual(['a', 'b', 'c']);
+    expect(plan.watching).toEqual([]);
+  });
+
+  it('keeps the host-player seated even at the end of the seat order', () => {
+    const ps = [mk('a'), mk('b'), mk('c'), mk('d', { isHost: true })];
+    const plan = planSeats(ps, 2);
+    expect(ids(plan.seated)).toEqual(['a', 'd']);
+    expect(ids(plan.watching)).toEqual(['b', 'c']);
+  });
+
+  it('prefers connected humans, then bots, then players in their grace period; never the away', () => {
+    const ps = [
+      mk('away', { away: true, connected: false }),
+      mk('grace', { connected: false }),
+      mk('bot', { isBot: true }),
+      mk('h1'),
+      mk('h2'),
+    ];
+    expect(ids(planSeats(ps, 2).seated)).toEqual(['h1', 'h2']);
+    expect(ids(planSeats(ps, 3).seated)).toEqual(['bot', 'h1', 'h2']);
+    expect(ids(planSeats(ps, 4).seated)).toEqual(['grace', 'bot', 'h1', 'h2']);
+    expect(ids(planSeats(ps, 9).watching)).toEqual([]);
   });
 });

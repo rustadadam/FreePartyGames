@@ -3,7 +3,7 @@ import type { Lobby } from '../../shared/types';
 import type { RoomClient } from '../net/room';
 import { ConfirmButton } from './ConfirmButton';
 import { GameStage } from './GameStage';
-import { AddBots, GamePicker, PlayerWall, SelectedGame, StartButton } from './Lobby';
+import { AddBots, DENSE_WALL, GamePicker, PlayerWall, SelectedGame, StartButton, wallSize } from './Lobby';
 import { Results } from './Results';
 import { RoomMenu } from './RoomMenu';
 import { prettyUrl, Ticket } from './Ticket';
@@ -14,7 +14,7 @@ export function ScreenView({ client, lobby, view }: { client: RoomClient; lobby:
 
   if (lobby.phase === 'lobby') {
     return (
-      <main class="view-screen screen-lobby">
+      <main class={`view-screen screen-lobby${lobby.players.length > DENSE_WALL ? ' is-crowded' : ''}`}>
         <div class="screen-lobby-ticket">
           <Ticket code={lobby.code} maxPlayers={lobby.maxPlayers} />
           <p class="screen-howto">
@@ -29,12 +29,12 @@ export function ScreenView({ client, lobby, view }: { client: RoomClient; lobby:
                 {lobby.players.length}/{lobby.maxPlayers}
               </span>
             </h2>
-            <PlayerWall lobby={lobby} canKick={isHost} onKick={kick} size="9vh" />
+            <PlayerWall lobby={lobby} canKick={isHost} onKick={kick} size={wallSize(lobby.players.length, 'screen')} />
           </section>
           {isHost ? (
             <section class="screen-host" aria-label="Host controls">
               <h2 class="screen-h">Pick a game</h2>
-              <GamePicker lobby={lobby} client={client} />
+              <GamePicker lobby={lobby} client={client} compact />
               <div class="screen-host-row">
                 {lobby.dev && <AddBots client={client} />}
                 <StartButton lobby={lobby} client={client} />
@@ -43,7 +43,7 @@ export function ScreenView({ client, lobby, view }: { client: RoomClient; lobby:
           ) : (
             <p class="screen-wait">The host picks the game from their phone.</p>
           )}
-          <SelectedGame lobby={lobby} />
+          <SelectedGame lobby={lobby} seating={!isHost} />
         </div>
         <RoomMenu client={client} lobby={lobby} placement="tv-corner" />
       </main>
@@ -55,7 +55,7 @@ export function ScreenView({ client, lobby, view }: { client: RoomClient; lobby:
       <div class="screen-stage">
         {lobby.phase === 'results' ? (
           <div class="screen-results">
-            <Results lobby={lobby} avatarSize="6vh" />
+            <Results lobby={lobby} kind="screen" />
           </div>
         ) : (
           <GameStage lobby={lobby} view={view} client={client} kind="screen" />

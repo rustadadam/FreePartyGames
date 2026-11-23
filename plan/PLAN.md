@@ -2,7 +2,7 @@
 
 ## Context
 
-The repo is empty: it holds a `Readme.md`, the game sketches in `Games.md`, and has no commits. The origin is `github.com/rustadadam/FreePartyGames`. The goal is a Jackbox-style party platform for 5–20 friends, built and run for free:
+The repo is empty: it holds a `Readme.md`, the game sketches in `Games.md`, and has no commits. The origin is `github.com/rustadadam/FreePartyGames`. The goal is a Jackbox-style party platform for 5–30 friends, built and run for free:
 
 - The host opens the site and gets a room code and a link.
 - Friends tap a texted link, or type the code on the home page, and play on their phones.
@@ -62,7 +62,7 @@ plan/            PLAN.md (this file), LEDGER.md, REPORT.md
   - **Host-player**: this phone plays and also holds the host controls.
 - If the host-player leaves, host controls move to the next player.
 - Identity is a random `playerId` plus a secret token, stored in localStorage per room. Reconnecting with the token restores the seat and the score.
-- The cap is 20 players plus one screen.
+- The room holds 30 players plus one screen. Each game keeps its own `maxPlayers` (20 for the current games). When the room holds more than the selected game's cap, the first `maxPlayers` present players in seat order play (the host-player always, connected humans before bots before players inside the disconnect grace, never away players) and the rest spectate that game like late joiners, then play the next one. The rule lives in `src/shared/seating.ts`.
 - Phones use the Screen Wake Lock API, plus a visible reconnect banner with automatic retry.
 
 ### Protocol
@@ -162,7 +162,7 @@ Each game is original in name, look and prompt content. Game mechanics follow th
 
 - **`tests/contract.test.ts`** is the critical one. For every registered game:
   - the manifest is valid, and the server and client registries have identical id sets;
-  - for player counts {min, 8, 20}, on 3 seeds each, bots play to `result()` within a step cap, using a fake clock;
+  - for player counts {min, 8, 20, the game's own maxPlayers} (clamped to the manifest), on 3 seeds each, plus one run with 30 players in the room (the game seats its cap, the rest spectate), bots play to `result()` within a step cap, using a fake clock;
   - nothing throws;
   - every view is JSON-serializable and under a size cap;
   - every action reaching `onAction` passed `actionSchema`.

@@ -2,7 +2,8 @@
 // Pure TypeScript: no DOM, no Cloudflare, no Math.random / Date.now.
 //
 // Rules (also shown in the Rules text of ui.tsx):
-//  - 3 rounds of 4 questions. Everyone picks one of 4 choices (locked once picked).
+//  - 3 rounds of 4 questions. Each round opens with a 5-second role card on every phone (the TV
+//    only says "check your phone"). Everyone picks one of 4 choices (locked once picked).
 //  - Team answer = plurality of picks. Tie: the tied choice that was locked in first wins.
 //    No picks at all = no team answer (counts as wrong, but nobody scores for it).
 //  - Right team answer: +2 team points. Each player who picked the right choice: +1 personal.
@@ -10,7 +11,11 @@
 //  - After the round everyone accuses a player. The Mole accuses too, as a decoy that never
 //    counts, so who has locked in (and when the phase ends) cannot single the Mole out. The Mole
 //    is caught if strictly more players accused them than any other player. Caught: +3 team points and +1 to each correct
-//    accuser. Not caught: Mole +3 personal. Personal points stay hidden until the Mole reveal.
+//    accuser. Not caught: Mole +3 personal.
+//  - Each phone gets "where my points came from" lines (`you.note`) for its own points only. A
+//    question reveal reads the same on every phone whoever the Mole is (a Mole-only line would
+//    point at them); the Mole's lines wait for the Mole reveal.
+//  - The game ends on the shell's podium: there is no final-standings page here.
 //  - Final score = personal points + the whole team total, for everyone who stayed.
 //  - The article title is hidden until the reveal (titles often give the answer away).
 import { z } from 'zod';
@@ -37,10 +42,12 @@ const settingsFields: SettingField[] = [
   { key: 'askSeconds', label: 'Answer time', hint: 'Per question', min: 10, max: 60, step: 5, unit: 's' },
 ];
 
-export type Phase = 'ask' | 'reveal' | 'accuse' | 'moleReveal' | 'done';
+export type Phase = 'role' | 'ask' | 'reveal' | 'accuse' | 'moleReveal' | 'done';
 
 /** Default time to answer a question (the host can change it). */
 export const ASK_MS = 25_000;
+/** The private role card that opens every round. */
+export const ROLE_MS = 5_000;
 export const REVEAL_MS = 8_000;
 export const ACCUSE_MS = 25_000;
 export const MOLE_MS = 10_000;
@@ -77,12 +84,18 @@ export interface WikiState {
   accuse: Record<string, string>;
   caught: boolean;
   caughtCount: number;
+  /** Questions this round the team got wrong (with an answer given): the Mole's +3 each, told at the Mole reveal. */
+  moleMisses: number;
   team: number;
   personal: Record<string, number>;
-  /** Personal points earned this round (shown at the Mole reveal). */
-  roundGain: Record<string, number>;
   /** Server ms the current phase times out. */
   deadline: number;
+}
+
+/** One source of points, in plain words ("for you: ..." or "for the team: ..."). */
+export interface NoteLine {
+  pts: number;
+  why: string;
 }
 
 export interface WikiView {
@@ -102,7 +115,14 @@ export interface WikiView {
   /** Who has locked in a pick (ask) or an accusation (accuse). */
   voted: string[];
   /** Per-viewer extras. null for the screen. */
-  you: null | { pick: number | null; accused: string | null; points: number; mole?: true; answerIndex?: number };
+  you: null | {
+    pick: number | null;
+    accused: string | null;
+    /** Where this player's points came from in this reveal: own points only. */
+    note: NoteLine[];
+    mole?: true;
+    answerIndex?: number;
+  };
   reveal: null | {
     article: string;
     answerIndex: number;
@@ -112,9 +132,7 @@ export interface WikiView {
     picks: Record<string, number>;
     counts: number[];
   };
-  roundEnd: null | { mole: string; caught: boolean; accuse: Record<string, string>; gain: Record<string, number> };
-  /** Total score per player; only from the Mole reveal on. */
-  scores: Record<string, number> | null;
+  roundEnd: null | { mole: string; caught: boolean; accuse: Record<string, string> };
 }
 
 const present = (s: WikiState): string[] => s.playerIds.filter((p) => !s.gone.includes(p));
@@ -159,8 +177,13 @@ function startRound(s: WikiState, ctx: GameCtx): void {
   s.moles.push(pickMole(s, ctx));
   s.accuse = {};
   s.caught = false;
-  s.roundGain = {};
-  startQuestion(s, ctx);
+  s.moleMisses = 0;
+  s.picks = {};
+  s.order = [];
+  s.teamPick = null;
+  s.teamRight = false;
+  s.phase = 'role';
+  arm(s, ctx, ROLE_MS);
 }
 
 function resolveQuestion(s: WikiState, ctx: GameCtx): void {
@@ -177,15 +200,11 @@ function resolveQuestion(s: WikiState, ctx: GameCtx): void {
   s.teamRight = s.teamPick === q.answer;
   if (s.teamRight) s.team += TEAM_RIGHT;
   else if (s.teamPick !== null) {
-    const mole = currentMole(s);
-    add(s.personal, mole, MOLE_WRONG);
-    add(s.roundGain, mole, MOLE_WRONG);
+    add(s.personal, currentMole(s), MOLE_WRONG);
+    s.moleMisses = (s.moleMisses ?? 0) + 1;
   }
   for (const [p, c] of Object.entries(s.picks)) {
-    if (c === q.answer) {
-      add(s.personal, p, PICK_RIGHT);
-      add(s.roundGain, p, PICK_RIGHT);
-    }
+    if (c === q.answer) add(s.personal, p, PICK_RIGHT);
   }
   s.phase = 'reveal';
   arm(s, ctx, REVEAL_MS);
@@ -203,14 +222,10 @@ function resolveAccuse(s: WikiState, ctx: GameCtx): void {
     s.team += CAUGHT_BONUS;
     s.caughtCount++;
     for (const [p, t] of Object.entries(s.accuse)) {
-      if (t === mole) {
-        add(s.personal, p, ACCUSE_RIGHT);
-        add(s.roundGain, p, ACCUSE_RIGHT);
-      }
+      if (t === mole) add(s.personal, p, ACCUSE_RIGHT);
     }
   } else {
     add(s.personal, mole, MOLE_HIDDEN);
-    add(s.roundGain, mole, MOLE_HIDDEN);
   }
   s.phase = 'moleReveal';
   arm(s, ctx, MOLE_MS);
@@ -223,6 +238,28 @@ function checkDone(s: WikiState, ctx: GameCtx): void {
     // Everyone, the Mole included: waiting on "everyone but one" would point at the Mole.
     if (present(s).every((p) => s.accuse[p] !== undefined)) resolveAccuse(s, ctx);
   }
+}
+
+/** Where `me` earned points in the current reveal, from public rules and their own picks only. */
+function noteFor(s: WikiState, me: string): NoteLine[] {
+  const mole = currentMole(s);
+  const lines: NoteLine[] = [];
+  if (s.phase === 'reveal') {
+    if (s.teamRight) lines.push({ pts: TEAM_RIGHT, why: 'for the team: the team was right' });
+    if (s.picks[me] === question(s).answer) lines.push({ pts: PICK_RIGHT, why: 'for you: you picked right' });
+    // Nothing Mole-only here: an extra line on one phone would point at the Mole. The Mole's
+    // points for wrong answers are told at the Mole reveal, when everyone sees who it was.
+  } else if (s.phase === 'moleReveal') {
+    const misses = s.moleMisses ?? 0;
+    if (me === mole && misses > 0) {
+      lines.push({ pts: MOLE_WRONG * misses, why: `for you: the team missed ${misses === 1 ? 'a question' : `${misses} questions`} (Mole)` });
+    }
+    if (s.caught) {
+      lines.push({ pts: CAUGHT_BONUS, why: 'for the team: the Mole was caught' });
+      if (s.accuse[me] === mole) lines.push({ pts: ACCUSE_RIGHT, why: 'for you: you accused the Mole' });
+    } else if (me === mole) lines.push({ pts: MOLE_HIDDEN, why: 'for you: you stayed hidden (Mole)' });
+  }
+  return lines;
 }
 
 function totals(s: WikiState): Record<string, number> {
@@ -256,7 +293,7 @@ export default defineGame<WikiState, WikiAction, WikiSettings>({
       qids: ids,
       round: 0,
       qi: 0,
-      phase: 'ask',
+      phase: 'role',
       moles: [],
       picks: {},
       order: [],
@@ -265,10 +302,10 @@ export default defineGame<WikiState, WikiAction, WikiSettings>({
       accuse: {},
       caught: false,
       caughtCount: 0,
+      moleMisses: 0,
       team: 0,
       personal: {},
-      roundGain: {},
-      deadline: 0,
+          deadline: 0,
     };
     startRound(s, ctx);
     return s;
@@ -290,7 +327,8 @@ export default defineGame<WikiState, WikiAction, WikiSettings>({
 
   onTimer(s, ctx, key) {
     if (key !== 'phase') return;
-    if (s.phase === 'ask') resolveQuestion(s, ctx);
+    if (s.phase === 'role') startQuestion(s, ctx);
+    else if (s.phase === 'ask') resolveQuestion(s, ctx);
     else if (s.phase === 'reveal') {
       if (s.qi + 1 < s.perRound) {
         s.qi++;
@@ -331,7 +369,7 @@ export default defineGame<WikiState, WikiAction, WikiSettings>({
       you = {
         pick: s.picks[me] ?? null,
         accused: s.accuse[me] ?? null,
-        points: s.personal[me] ?? 0,
+        note: noteFor(s, me),
       };
       if (me === mole && s.phase !== 'done') {
         you.mole = true;
@@ -369,9 +407,12 @@ export default defineGame<WikiState, WikiAction, WikiSettings>({
       reveal,
       // The Mole's decoy accusation is left out: only accusations that counted are shown.
       roundEnd: roundOver
-        ? { mole, caught: s.caught, accuse: Object.fromEntries(Object.entries(s.accuse).filter(([p]) => p !== mole)), gain: s.roundGain }
+        ? {
+            mole,
+            caught: s.caught,
+            accuse: Object.fromEntries(Object.entries(s.accuse).filter(([p]) => p !== mole)),
+          }
         : null,
-      scores: roundOver ? totals(s) : null,
     };
   },
 

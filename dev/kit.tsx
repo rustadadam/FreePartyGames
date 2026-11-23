@@ -12,11 +12,14 @@ import {
   DrawingCanvas,
   makeDrawing,
   PlayerChip,
+  PointsNote,
   PromptCard,
   QR,
   RevealStage,
+  RoleCard,
   StrokeView,
   Timer,
+  useDraft,
   useServerNow,
   Vote,
   type Stroke,
@@ -52,6 +55,10 @@ function Preview() {
   const [vote, setVote] = useState<string | null>(null);
   const now = useServerNow(0);
   const [deadline] = useState(() => now + 30_000);
+  const [roleDeadline] = useState(() => now + 5_000);
+  const [draft, setDraft] = useState('');
+  const [saved, setSaved] = useState<string[]>([]);
+  useDraft(draft, (t) => setSaved((s) => [...s, t]), { deadline: roleDeadline + 25_000 });
   return (
     <main class="view-phone" data-game={game} style={{ padding: '16px', gap: '28px', display: 'grid' }}>
       <section class="g-stack">
@@ -76,6 +83,15 @@ function Preview() {
         <PromptCard eyebrow="Question" footer="Source: Great Molasses Flood">
           How fast did the wave travel?
         </PromptCard>
+      </section>
+      <section class="g-stack">
+        <span class="eyebrow">RoleCard (5 s, same layout for every role)</span>
+        <RoleCard eyebrow="Round 2 · your role" role="You are an artist" detail="Draw a pancake. Blend in." deadline={roleDeadline} total={5_000} />
+        <span class="eyebrow">PointsNote</span>
+        <PointsNote lines={[{ pts: 3, why: 'pizza matched' }, { pts: 1, why: 'spotted the forger' }]} total={4} />
+        <PointsNote lines={[{ pts: -2, why: 'fooled by the forger' }]} />
+        <span class="eyebrow">useDraft (type, then hide the tab: {saved.length} saved{saved.length ? `, last "${saved[saved.length - 1]}"` : ''})</span>
+        <input class="input" value={draft} onInput={(e) => setDraft((e.target as HTMLInputElement).value)} placeholder="Half-typed answer" />
       </section>
       <section class="g-stack">
         <span class="eyebrow">

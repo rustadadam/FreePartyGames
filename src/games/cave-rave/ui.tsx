@@ -1,13 +1,14 @@
 // Cave Rave UI. Phones run the song and judge locally (highway.tsx); the server only sees one
 // score per duel. The screen shows the bracket, a live score race and the sabotage feed.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Avatar, PlayerChip, RulesSheet, Timer, playerOf, useEphemeral, useServerNow, useSfxCount, useSfxCue, useSfxHold } from '../../client/kit';
+import { Avatar, PlayerChip, PointsNote, RulesSheet, Timer, playerOf, useEphemeral, useServerNow, useSfxCount, useSfxCue, useSfxHold } from '../../client/kit';
 import type { ClientGameModule, PlayerProps, ScreenProps } from '../../client/gameModule';
+import type { PointsLine } from '../../client/kit/PointsNote';
 import type { Lobby } from '../../shared/types';
 import { audioState, click, ctxToPerf, loadOffset, medianOffset, perfToCtx, saveOffset, unlockAudio } from './audio';
 import { makeChart } from './chart';
 import { Highway, runFor } from './highway';
-import { EFFECTS, EFFECT_MS, READY_FIRST_MS, READY_MS, SAB_COOLDOWN_MS, type CRView, type DuelView, type Effect, type LivePayload, type SabEvent } from './rules';
+import { CHAMPION_BONUS, EFFECTS, EFFECT_MS, POINTS_PER_ROUND, READY_FIRST_MS, READY_MS, SAB_COOLDOWN_MS, type CRView, type DuelView, type Effect, type LivePayload, type SabEvent } from './rules';
 // Type-only import from logic.ts keeps zod out of this chunk.
 import type { CRAction } from './logic';
 import { play } from './sfx';
@@ -71,6 +72,21 @@ function RoundLabel({ view }: { view: CRView }) {
       {final ? 'Final' : `Round ${view.round} of ${view.rounds}`} · {view.chart.notes} notes
     </span>
   );
+}
+
+/** My own point sources so far, from the public bracket history: one line per round cleared, plus the crown. */
+function myPoints(view: CRView, lobby: Lobby, me: string): PointsLine[] {
+  const lines: PointsLine[] = [];
+  for (const r of view.history) {
+    const d = r.duels.find((x) => x.winner === me);
+    if (!d) continue;
+    const when = r.round === view.rounds ? 'the final' : `round ${r.round}`;
+    const rival = d.a === me ? d.b : d.a;
+    lines.push({ pts: POINTS_PER_ROUND, why: rival ? `beat ${nameOf(lobby, rival)} in ${when}` : `bye in ${when}` });
+  }
+  // The final's reveal is when the crown is won; the shell's podium follows it.
+  if (view.phase === 'reveal' && view.round === view.rounds && view.duels.some((d) => d.winner === me)) lines.push({ pts: CHAMPION_BONUS, why: 'cave champion' });
+  return lines;
 }
 
 function DuelCard({ duel, lobby, me, live, view, big }: { duel: DuelView; lobby: Lobby; me?: string; live?: Record<string, number>; view: CRView; big?: boolean }) {
@@ -346,7 +362,7 @@ function Player({ view, send, lobby, me }: PlayerProps<CRView, CRAction>) {
         <RoundLabel view={view} />
         <p class="g-title">Score sent. Waiting for the other players.</p>
         <Timer deadline={view.deadline} />
-        <Duels view={view} lobby={lobby} me={me} />
+        {!lobby.screenConnected && <Duels view={view} lobby={lobby} me={me} />}
       </section>
     );
   }
@@ -366,10 +382,8 @@ function Player({ view, send, lobby, me }: PlayerProps<CRView, CRAction>) {
             <PlayerChip lobby={lobby} id={you.opponent} size="44px" />
           </div>
         ) : (
-          <p class="g-title">{you.role === 'bye' ? 'Bye round. You move on to the next round.' : "You're out. You can still sabotage."}</p>
+          <p class="g-title">{you.role === 'bye' ? "Bye round. You move on. Play along for practice." : "You're out. When the song starts, sabotage the players still in."}</p>
         )}
-        {you.role === 'out' && <p class="g-muted">When the song starts, use fog, mirror or wobble on the players still in.</p>}
-        {you.role === 'bye' && <p class="g-muted">Play along for practice. Your score doesn't count.</p>}
         <SoundAndTiming offset={offset} onCalibrate={() => setCalibrating(true)} />
         {!lobby.screenConnected && <Duels view={view} lobby={lobby} me={me} />}
         {isDuel && (
@@ -394,12 +408,14 @@ function Player({ view, send, lobby, me }: PlayerProps<CRView, CRAction>) {
   if (view.phase === 'reveal') {
     const mine = myDuel?.scores;
     const won = myDuel?.winner === me;
+    const final = view.round === view.rounds;
+    const points = myPoints(view, lobby, me);
     return (
       <section class="g-stack cr-reveal">
         <RoundLabel view={view} />
         {myDuel?.b ? (
           <>
-            <p class={`g-call cr-call ${won ? 'is-won' : 'is-lost'}`}>{won ? 'You win!' : "You're out"}</p>
+            <p class={`g-call cr-call ${won ? 'is-won' : 'is-lost'}`}>{won ? (final ? "You're the champion!" : 'You win!') : "You're out"}</p>
             {mine && (
               <p class="cr-versus">
                 {fmt(mine[me]?.score ?? 0)} <span class="g-muted">vs</span> {fmt(mine[you.opponent ?? '']?.score ?? 0)}
@@ -413,23 +429,14 @@ function Player({ view, send, lobby, me }: PlayerProps<CRView, CRAction>) {
           <p class="g-title">Round {view.round} results</p>
         )}
         <Timer deadline={view.deadline} quiet />
-        <Duels view={view} lobby={lobby} me={me} />
+        {!lobby.screenConnected && <Duels view={view} lobby={lobby} me={me} />}
+        <PointsNote lines={points} total={points.length > 1 ? points.reduce((n, l) => n + l.pts, 0) : undefined} />
       </section>
     );
   }
 
-  // done
-  const champ = view.champion;
-  return (
-    <section class="g-stack cr-reveal">
-      <span class="eyebrow">Cave champion</span>
-      <div class="cr-champ">
-        <Avatar name={nameOf(lobby, champ)} color={playerOf(lobby, champ)?.color ?? '#9aa5b1'} size="96px" />
-        <p class="g-call">{champ === me ? 'You!' : nameOf(lobby, champ)}</p>
-      </div>
-      <History view={view} lobby={lobby} me={me} />
-    </section>
-  );
+  // 'done' only exists for result(): the shell moves straight on to its podium, so nothing is drawn.
+  return null;
 }
 
 // ---------- screen ----------
@@ -476,8 +483,8 @@ function Screen({ view, lobby }: ScreenProps<CRView>) {
   let call: string;
   if (view.phase === 'ready') call = view.round === view.rounds ? 'The final' : 'Get ready';
   else if (view.phase === 'play') call = view.startAt && now < view.startAt ? String(Math.ceil((view.startAt - now) / 1000)) : view.chartOver ? 'Scores coming in' : 'Go!';
-  else if (view.phase === 'reveal') call = 'Results';
-  else call = `${nameOf(lobby, view.champion)} rules the cave`;
+  else if (view.round === view.rounds) call = `${nameOf(lobby, view.duels[0]?.winner)} rules the cave`;
+  else call = 'Results';
 
   return (
     <section class={`cr-screen phase-${view.phase}`}>
@@ -495,13 +502,7 @@ function Screen({ view, lobby }: ScreenProps<CRView>) {
       <SongProgress view={view} now={now} />
       <div class="cr-screen-body">
         <div class="cr-screen-main">
-          {view.phase === 'done' ? (
-            <div class="cr-champ is-big">
-              <Avatar name={nameOf(lobby, view.champion)} color={playerOf(lobby, view.champion)?.color ?? '#9aa5b1'} size="22vh" />
-            </div>
-          ) : (
-            <Duels view={view} lobby={lobby} live={live} big />
-          )}
+          <Duels view={view} lobby={lobby} live={live} big />
           <History view={view} lobby={lobby} big />
         </div>
         <aside class="cr-meddlers">

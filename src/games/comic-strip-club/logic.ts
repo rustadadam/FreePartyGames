@@ -16,7 +16,7 @@
 // every strip, so banning all of them would leave nothing to vote for.
 import { z } from 'zod';
 import { defineGame, type GameCtx } from '../../core/game';
-import { makeDrawing } from '../../shared/strokes';
+import { makeDrawing, type Stroke } from '../../shared/strokes';
 import { StrokesSchema } from '../../shared/strokeSchema';
 import type { Rng } from '../../core/rng';
 import type { SettingField } from '../../shared/types';
@@ -41,9 +41,15 @@ const POINTS_PER_VOTE = 100;
 
 const MAX_VOTE_ACTION_ID = 64;
 
+// A draft uses exactly the submit's own limits (docs/ADDING_A_GAME.md, "Drafts").
+const PromptText = z.string().trim().min(1).max(MAX_PROMPT_CHARS);
+const PanelNo = z.number().int().min(1).max(PANELS);
+
 export const actionSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('prompt'), text: z.string().trim().min(1).max(MAX_PROMPT_CHARS) }).strict(),
-  z.object({ type: z.literal('panel'), panel: z.number().int().min(1).max(PANELS), strokes: StrokesSchema }).strict(),
+  z.object({ type: z.literal('prompt'), text: PromptText }).strict(),
+  z.object({ type: z.literal('panel'), panel: PanelNo, strokes: StrokesSchema }).strict(),
+  /** Autosave of half-done work: `text` in the premise round, `panel` + `strokes` in a panel round. */
+  z.object({ type: z.literal('draft'), text: PromptText.optional(), panel: PanelNo.optional(), strokes: StrokesSchema.optional() }).strict(),
   z.object({ type: z.literal('vote'), strip: z.string().min(1).max(MAX_VOTE_ACTION_ID) }).strict(),
 ]);
 export type CscAction = z.infer<typeof actionSchema>;
@@ -71,6 +77,8 @@ export interface Remix {
   panels: Panel[];
 }
 
+export type Draft = { text: string } | { strokes: Stroke[] };
+
 export interface CscSettings {
   /** Seconds to write a premise. */
   promptSeconds: number;
@@ -97,6 +105,8 @@ export interface CscState {
   deadline: number | null;
   /** This round's submissions: prompt text (prompt round) or drawing asset / null for blank. */
   inbox: Record<string, string | null>;
+  /** This round's autosaved work, by player. Never in a view; cleared when a round starts. */
+  drafts: Record<string, Draft>;
   /** One chain per player, in seat order. */
   chains: Chain[];
   /** Strip ids (authors) in reveal order. */
@@ -135,6 +145,12 @@ export interface StripView {
   panels: Panel[];
 }
 
+/** One source of this player's points, in plain words (for the kit PointsNote). */
+export interface PointLine {
+  pts: number;
+  why: string;
+}
+
 export interface CscView {
   phase: Phase;
   round: number;
@@ -147,7 +163,7 @@ export interface CscView {
   done: string[];
   gone: string[];
   /** Player only: what this player must do right now. */
-  you: { submitted: boolean; panel: number; source: Source | null; vote: string | null } | null;
+  you: { submitted: boolean; panel: number; source: Source | null; vote: string | null; earned: PointLine[] | null } | null;
   /** From the reveal on: every strip, in reveal order. */
   strips: StripView[] | null;
   reveal: { startAt: number; stepMs: number; stripMs: number } | null;
@@ -169,14 +185,28 @@ const submittedAll = (s: CscState) => present(s).every((p) => p in s.inbox);
 function startRound(s: CscState, ctx: GameCtx): void {
   s.phase = s.round === 0 ? 'prompt' : 'draw';
   s.inbox = {};
+  s.drafts = {};
   const ms = s.round === 0 ? s.promptMs : s.drawMs;
   s.deadline = ctx.now() + ms;
   // Everyone gone: don't sit out the clock.
   ctx.setTimer('round', present(s).length === 0 ? 500 : ms + GRACE_MS);
 }
 
+/** Anyone who never submitted but has autosaved work gets that work submitted for them. */
+function applyDrafts(s: CscState, ctx: GameCtx): void {
+  for (const [id, d] of Object.entries(s.drafts)) {
+    if (id in s.inbox) continue;
+    if (s.phase === 'prompt' && 'text' in d) s.inbox[id] = d.text;
+    else if (s.phase === 'draw' && 'strokes' in d) s.inbox[id] = storePanel(ctx, d.strokes);
+  }
+  s.drafts = {};
+}
+
+const storePanel = (ctx: GameCtx, strokes: Stroke[]) => (strokes.length ? ctx.putAsset(makeDrawing(strokes, PANEL_ASPECT)) : null);
+
 function endRound(s: CscState, ctx: GameCtx): void {
   const n = s.playerIds.length;
+  applyDrafts(s, ctx);
   if (s.round === 0) {
     s.chains = s.playerIds.map((id) => {
       const text = s.inbox[id];
@@ -218,6 +248,23 @@ export function contributors(chain: Chain): string[] {
   if (!chain.auto) out.add(chain.author);
   for (const p of chain.panels) if (p.asset) out.add(p.by);
   return [...out];
+}
+
+const SHORT = 26;
+const quote = (t: string) => `"${t.length > SHORT ? `${t.slice(0, SHORT - 1).trimEnd()}…` : t}"`;
+
+/** Where `me` earned points: one line per strip they worked on that got votes. Their own lines only. */
+export function earnedLines(s: Pick<CscState, 'chains' | 'counts'>, me: string): PointLine[] {
+  const out: PointLine[] = [];
+  for (const chain of s.chains) {
+    const votes = s.counts[chain.author] ?? 0;
+    if (!votes || !contributors(chain).includes(me)) continue;
+    const did: string[] = [];
+    if (chain.author === me && !chain.auto) did.push('wrote the premise');
+    chain.panels.forEach((p, i) => p.by === me && p.asset && did.push(`drew panel ${i + 1}`));
+    out.push({ pts: votes * POINTS_PER_VOTE, why: `${votes} ${votes === 1 ? 'vote' : 'votes'} for ${quote(chain.prompt)} (you ${did.join(' and ')})` });
+  }
+  return out;
 }
 
 function startTally(s: CscState, ctx: GameCtx): void {
@@ -302,6 +349,7 @@ export default defineGame<CscState, CscAction, CscSettings>({
       round: 0,
       deadline: null,
       inbox: {},
+      drafts: {},
       chains: [],
       order: [],
       revealAt: null,
@@ -324,8 +372,13 @@ export default defineGame<CscState, CscAction, CscSettings>({
       if (submittedAll(s)) endRound(s, ctx);
     } else if (a.type === 'panel') {
       if (s.phase !== 'draw' || a.panel !== s.round || playerId in s.inbox) return;
-      s.inbox[playerId] = a.strokes.length ? ctx.putAsset(makeDrawing(a.strokes, PANEL_ASPECT)) : null;
+      s.inbox[playerId] = storePanel(ctx, a.strokes);
       if (submittedAll(s)) endRound(s, ctx);
+    } else if (a.type === 'draft') {
+      // Autosave only: never counts as done, never ends a round, latest wins. Stale ones are dropped.
+      if (s.gone.includes(playerId) || playerId in s.inbox) return;
+      if (s.phase === 'prompt' && a.text) s.drafts[playerId] = { text: a.text };
+      else if (s.phase === 'draw' && a.panel === s.round && a.strokes?.length) s.drafts[playerId] = { strokes: a.strokes };
     } else {
       if (s.phase !== 'vote' || playerId in s.votes) return;
       // Only real strips, never your own prompt's strip.
@@ -381,6 +434,7 @@ export default defineGame<CscState, CscAction, CscSettings>({
               panel: s.round,
               source: sourceFor(s, me),
               vote: s.votes[me] ?? null,
+              earned: showTally ? earnedLines(s, me) : null,
             }
           : null,
       strips,

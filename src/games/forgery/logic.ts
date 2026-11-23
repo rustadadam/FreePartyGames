@@ -1,7 +1,8 @@
 // Forgery: a hidden-impostor drawing game. Pure TypeScript (no DOM, no Cloudflare, no
 // Math.random / Date.now).
 //
-// A round: everyone but the forger gets a category and a secret word; the forger gets only the
+// A round opens with a 5 s `role` phase: every phone shows its private role card before anyone can
+// draw. Then: everyone but the forger gets a category and a secret word; the forger gets only the
 // category. Players take turns (LAPS laps, fixed shuffled order), one continuous stroke each on a
 // shared canvas, in their seat color. Then everyone votes for the forger. A forger who is
 // caught gets one typed guess at the word (the UI offers type-ahead from a long word list).
@@ -19,7 +20,7 @@ import { StrokeSchema } from '../../shared/strokeSchema';
 import type { SettingField } from '../../shared/types';
 import { CATEGORIES } from './content';
 import { GUESS_WORDS, normalizeGuess } from './words';
-import { ASPECT, GUESS_MS, LAPS, MAX_PLAYERS, MAX_ROUNDS, MIN_PLAYERS, POINTS, REVEAL_MS, STROKE_W, TURN_MS, VOTE_MS } from './rules';
+import { ASPECT, GUESS_MS, LAPS, MAX_PLAYERS, MAX_ROUNDS, MIN_PLAYERS, POINTS, REVEAL_MS, ROLE_MS, STROKE_W, TURN_MS, VOTE_MS } from './rules';
 
 const MAX_Y = strokeBoxHeight(ASPECT);
 /** Live-ink batches are small: the canvas flushes about every 50 ms. */
@@ -38,6 +39,8 @@ export const actionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('stroke'), stroke: StrokeSchema }).strict(),
   z.object({ type: z.literal('vote'), target: z.string().min(1).max(MAX_ID_LENGTH) }).strict(),
   z.object({ type: z.literal('guess'), word: z.string().min(1).max(60) }).strict(),
+  /** The forger's half-typed guess (autosave, same limits as `guess`). Submitted if time runs out. */
+  z.object({ type: z.literal('draft'), word: z.string().min(1).max(60) }).strict(),
 ]);
 export type ForgeryAction = z.infer<typeof actionSchema>;
 
@@ -53,9 +56,15 @@ const settingsFields: SettingField[] = [
   { key: 'turnSeconds', label: 'Drawing turn', hint: 'Time for each line', min: 10, max: 60, step: 5, unit: 's' },
 ];
 
-export type Phase = 'draw' | 'vote' | 'guess' | 'reveal' | 'done';
+export type Phase = 'role' | 'draw' | 'vote' | 'guess' | 'reveal' | 'done';
 /** escaped: not accused. stolen: caught, guessed right. caught: caught, guessed wrong. void: round abandoned. */
 export type Outcome = 'escaped' | 'stolen' | 'caught' | 'void';
+
+/** One source of points, in plain words ("you escaped"). Shown to the player who earned it. */
+export interface PointsLine {
+  pts: number;
+  why: string;
+}
 
 export interface TurnRecord {
   by: string;
@@ -94,6 +103,10 @@ export interface ForgeryState {
   outcome: Outcome | null;
   /** Points awarded this round, per player id. */
   gain: Record<string, number>;
+  /** Where each player's points came from this round (a player only ever sees their own). */
+  lines: Record<string, PointsLine[]>;
+  /** The forger's autosaved guess while the guess phase runs. Never in a view. */
+  guessDraft: string | null;
 }
 
 export interface ForgeryView {
@@ -124,6 +137,8 @@ export interface ForgeryView {
     tally: Record<string, number>;
     accused: string | null;
   } | null;
+  /** The viewing player's own points this round, one line per source. Reveal only. */
+  mine: PointsLine[];
   /** Reveal and done only. */
   reveal: {
     forger: string;
@@ -137,7 +152,7 @@ export interface ForgeryView {
 const present = (s: ForgeryState): string[] => s.playerIds.filter((id) => !s.gone.includes(id));
 
 function clearRoundTimers(ctx: GameCtx): void {
-  for (const k of ['turn', 'vote', 'guess', 'next']) ctx.clearTimer(k);
+  for (const k of ['role', 'turn', 'vote', 'guess', 'next']) ctx.clearTimer(k);
 }
 
 function finishGame(s: ForgeryState, ctx: GameCtx): void {
@@ -177,6 +192,15 @@ function startRound(s: ForgeryState, ctx: GameCtx): void {
   s.guess = null;
   s.outcome = null;
   s.gain = {};
+  s.lines = {};
+  s.guessDraft = null;
+  s.phase = 'role';
+  s.deadline = ctx.now() + ROLE_MS;
+  ctx.setTimer('role', ROLE_MS);
+}
+
+/** The role card is done: the first turn begins. */
+function startDrawing(s: ForgeryState, ctx: GameCtx): void {
   s.phase = 'draw';
   beginTurn(s, ctx);
 }
@@ -216,6 +240,7 @@ function resolveVote(s: ForgeryState, ctx: GameCtx): void {
   if (s.accused !== s.forger) return endRound(s, ctx, 'escaped');
   if (s.gone.includes(s.forger)) return endRound(s, ctx, 'caught');
   s.phase = 'guess';
+  s.guessDraft = null;
   s.deadline = ctx.now() + GUESS_MS;
   ctx.setTimer('guess', GUESS_MS);
 }
@@ -223,18 +248,22 @@ function resolveVote(s: ForgeryState, ctx: GameCtx): void {
 function endRound(s: ForgeryState, ctx: GameCtx, outcome: Outcome): void {
   clearRoundTimers(ctx);
   const gain: Record<string, number> = {};
-  const give = (id: string, pts: number) => {
-    if (pts > 0 && !s.gone.includes(id)) gain[id] = (gain[id] ?? 0) + pts;
+  const lines: Record<string, PointsLine[]> = {};
+  const give = (id: string, pts: number, why: string) => {
+    if (pts <= 0 || s.gone.includes(id)) return;
+    gain[id] = (gain[id] ?? 0) + pts;
+    (lines[id] ??= []).push({ pts, why });
   };
   if (outcome !== 'void') {
     const artists = s.playerIds.filter((id) => id !== s.forger);
-    for (const id of artists) if (s.votes[id] === s.forger) give(id, POINTS.sharpEye);
-    if (outcome === 'escaped') give(s.forger, POINTS.escaped);
-    else if (outcome === 'stolen') give(s.forger, POINTS.stolen);
-    else for (const id of artists) give(id, POINTS.caught);
+    for (const id of artists) if (s.votes[id] === s.forger) give(id, POINTS.sharpEye, 'you spotted the forger');
+    if (outcome === 'escaped') give(s.forger, POINTS.escaped, 'you escaped');
+    else if (outcome === 'stolen') give(s.forger, POINTS.stolen, 'you guessed the word');
+    else for (const id of artists) give(id, POINTS.caught, 'the forger was caught');
   }
   for (const [id, pts] of Object.entries(gain)) s.scores[id] = (s.scores[id] ?? 0) + pts;
   s.gain = gain;
+  s.lines = lines;
   s.outcome = outcome;
   s.phase = 'reveal';
   s.deadline = ctx.now() + REVEAL_MS;
@@ -286,6 +315,8 @@ export default defineGame<ForgeryState, ForgeryAction, ForgerySettings>({
       guess: null,
       outcome: null,
       gain: {},
+      lines: {},
+      guessDraft: null,
     };
     startRound(s, ctx);
     return s;
@@ -323,18 +354,31 @@ export default defineGame<ForgeryState, ForgeryAction, ForgerySettings>({
         endRound(s, ctx, guess === s.word ? 'stolen' : 'caught');
         return;
       }
+      case 'draft': {
+        // Autosave only: never ends the phase, never in a view. Latest wins.
+        if (s.phase !== 'guess' || playerId !== s.forger) return;
+        s.guessDraft = action.word;
+        return;
+      }
     }
   },
 
   onTimer(s, ctx, key) {
-    if (key === 'turn' && s.phase === 'draw') {
+    if (key === 'role' && s.phase === 'role') {
+      startDrawing(s, ctx);
+    } else if (key === 'turn' && s.phase === 'draw') {
       s.strokes.push({ by: s.turns[s.turn], id: null });
       s.turn++;
       beginTurn(s, ctx);
     } else if (key === 'vote' && s.phase === 'vote') {
       resolveVote(s, ctx);
     } else if (key === 'guess' && s.phase === 'guess') {
-      endRound(s, ctx, 'caught'); // no guess in time
+      // Time is up: submit the forger's autosaved guess if it is a real word, else no guess.
+      const draft = s.guessDraft ? normalizeGuess(s.guessDraft) : '';
+      if (draft && GUESS_WORDS.includes(draft)) {
+        s.guess = draft;
+        endRound(s, ctx, draft === s.word ? 'stolen' : 'caught');
+      } else endRound(s, ctx, 'caught');
     } else if (key === 'next' && s.phase === 'reveal') {
       if (s.round >= s.rounds) finishGame(s, ctx);
       else startRound(s, ctx);
@@ -345,7 +389,7 @@ export default defineGame<ForgeryState, ForgeryAction, ForgerySettings>({
     if (!s.playerIds.includes(playerId) || s.gone.includes(playerId)) return;
     s.gone.push(playerId);
     if (s.phase === 'reveal' || s.phase === 'done') return; // the reveal timer moves on, startRound checks who is left
-    const inRound = s.phase === 'draw' || s.phase === 'vote' || s.phase === 'guess';
+    const inRound = s.phase === 'role' || s.phase === 'draw' || s.phase === 'vote' || s.phase === 'guess';
     if (inRound && (playerId === s.forger || present(s).length < MIN_PLAYERS)) return endRound(s, ctx, s.phase === 'guess' && playerId === s.forger ? 'caught' : 'void');
     if (s.phase === 'draw' && s.turns[s.turn] === playerId) {
       s.strokes.push({ by: playerId, id: null });
@@ -384,6 +428,7 @@ export default defineGame<ForgeryState, ForgeryAction, ForgerySettings>({
       myVote: me && s.phase === 'vote' ? (s.votes[me] ?? null) : null,
       you: me ? { role: isForger ? 'forger' : 'artist', word: isForger ? null : s.word } : null,
       result: voteOver ? { votes: s.votes, tally: s.tally, accused: s.accused } : null,
+      mine: s.phase === 'reveal' && me ? (s.lines[me] ?? []) : [],
       reveal: showReveal && s.outcome ? { forger: s.forger, word: s.word, guess: s.guess, outcome: s.outcome, gain: s.gain } : null,
     };
   },

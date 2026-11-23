@@ -1,40 +1,24 @@
-// Second Witness: everyone answers a category prompt with one or two answers, hoping someone else
+// Second Witness: everyone answers one category prompt with one or two answers, hoping someone else
 // wrote the same thing. Pure TypeScript: no DOM, no Cloudflare, no Math.random / Date.now.
 //
 // Rules (also shown in the Rules text of ui.tsx; constants live in rules.ts):
-//  - 6 rounds, score multipliers x1 x1 x2 x2 x3 x3. Each round has a different prompt.
-//  - Write (30 s): each player locks in one or two answers (<= 40 chars). Two answers that normalize
-//    the same count as one. Nobody sees anyone else's answers until their turn.
-//  - Call: the players who wrote something take turns in a random order. On a player's turn their
-//    words are shown to everybody, and every other player has 7 s to say which of their own words
-//    match (drag a word onto the other, or tap one then the other). Players decide for themselves;
-//    the game does not check. A word is matched once any claim touches it, on either side.
-//    The turn ends early when every word in the room is matched or already failed.
-//  - Result (between turns): a word that nobody matched fails with an error, and every player sees
-//    the points they just earned. Failed words cannot match later.
+//  - One prompt, two phases.
+//  - Write (30 s, host setting): each player locks in one or two answers (<= 40 chars). Two answers that
+//    normalize the same count as one. A half-typed answer is sent as a `draft` and submitted when the
+//    timer runs out. The phase ends early when every present player has locked in.
+//  - Match (no turns): players say their words out loud, round the room, and on their own phone tap
+//    the words that someone else matched. It is an honor system: the game does not check. Each player
+//    sees only their own words. The phase ends when every present player has checked off Done (a
+//    player who wrote nothing has nothing to do, so counts as done); Done can be undone until then.
+//    A backstop timer (120 s, host setting) ends it anyway.
 //  - Scoring: one answer, matched: 3. Two answers, both matched: 5; only one: 1. Otherwise 0.
-//    Times the round's multiplier. Points are added at the end of each turn.
-//  - Unique thinker: 3+ rounds with two answers and 0 points earns a flat +10 at the end.
+//  - Then the game is over: the shell's podium and ranking take it from here.
 import { z } from 'zod';
 import { defineGame, type GameCtx } from '../../core/game';
 import type { SettingField } from '../../shared/types';
-import { PROMPTS, PROMPT_BY_ID, GENERIC_ANSWERS } from './content';
-import { basePoints, cleanAnswers, looselyRelated, normalize, outcomeOf } from './match';
-import {
-  CALL_MS,
-  FINAL_MS,
-  MAX_ANSWER_LEN,
-  MAX_PLAYERS,
-  MIN_PLAYERS,
-  MULTIPLIERS,
-  RESULT_MS,
-  ROUNDS,
-  STANDINGS_MS,
-  UNIQUE_BONUS,
-  UNIQUE_MIN_ROUNDS,
-  WRITE_MS,
-  type Outcome,
-} from './rules';
+import { GENERIC_ANSWERS, PROMPTS, PROMPT_BY_ID } from './content';
+import { basePoints, cleanAnswers, pointsWhy, type PointsWhy } from './match';
+import { MATCH_MS, MAX_ANSWER_LEN, MAX_PLAYERS, MIN_PLAYERS, WRITE_MS } from './rules';
 
 const Answer = z
   .string()
@@ -42,10 +26,21 @@ const Answer = z
   .transform((t) => t.trim())
   .pipe(z.string().min(1).max(MAX_ANSWER_LEN));
 
+/** The same limits as a real answer, except that a half-typed line may be empty. */
+const DraftLine = z
+  .string()
+  .max(MAX_ANSWER_LEN * 4)
+  .transform((t) => t.trim())
+  .pipe(z.string().max(MAX_ANSWER_LEN));
+
 export const actionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('submit'), answers: z.array(Answer).min(1).max(2) }).strict(),
-  /** "My word `mine` matches the word `theirs` of the player whose turn it is." Sent again, it takes the claim back. */
-  z.object({ type: z.literal('match'), mine: z.number().int().min(0).max(1), theirs: z.number().int().min(0).max(1) }).strict(),
+  /** Autosave of the two input lines (see docs/ADDING_A_GAME.md, Drafts). Never locks the player in. */
+  z.object({ type: z.literal('draft'), answers: z.array(DraftLine).min(1).max(2) }).strict(),
+  /** "Someone else matched my word `word`" (on), or taking it back (off). */
+  z.object({ type: z.literal('match'), word: z.number().int().min(0).max(1), on: z.boolean() }).strict(),
+  /** Checks off (or un-checks) Done. */
+  z.object({ type: z.literal('done'), on: z.boolean() }).strict(),
 ]);
 export type SWAction = z.infer<typeof actionSchema>;
 
@@ -53,104 +48,74 @@ export type SWAction = z.infer<typeof actionSchema>;
 export interface SWSettings {
   /** How long everyone has to write their words. */
   writeSeconds: number;
-  /** How long each player's words are up for matching. */
-  callSeconds: number;
+  /** Backstop for the matching phase: it normally ends when everyone is Done. */
+  matchSeconds: number;
 }
 
 const settingsFields: SettingField[] = [
-  { key: 'writeSeconds', label: 'Writing time', hint: 'To write your words each round', min: 10, max: 90, step: 5, unit: 's' },
-  { key: 'callSeconds', label: 'Matching time', hint: 'Per player, to match their words', min: 2, max: 10, step: 1, unit: 's' },
+  { key: 'writeSeconds', label: 'Writing time', hint: 'To write your words', min: 10, max: 90, step: 5, unit: 's' },
+  { key: 'matchSeconds', label: 'Matching time', hint: 'At most, if someone forgets to tap Done', min: 30, max: 300, step: 15, unit: 's' },
 ];
 
-export type Phase = 'write' | 'call' | 'result' | 'reveal' | 'final' | 'done';
-
-/** `by` says their word `mine` matches word `theirs` of `target`, on target's turn. */
-interface Claim {
-  target: string;
-  by: string;
-  mine: number;
-  theirs: number;
-}
+export type Phase = 'write' | 'match' | 'done';
 
 export interface SWState {
   playerIds: string[];
   gone: string[];
   /** Phase lengths chosen by the host, in ms. */
   writeMs: number;
-  callMs: number;
-  /** The six prompt ids, in round order. */
-  promptIds: string[];
-  /** 1-based. */
-  round: number;
+  matchMs: number;
+  promptId: string;
   phase: Phase;
   /** Server ms the current phase times out (0 when none). */
   deadline: number;
-  /** Locked-in answers this round (1 or 2 each, already de-duplicated). */
+  /** Locked-in answers (1 or 2 each, already de-duplicated). */
   answers: Record<string, string[]>;
-  /** This round's turns: the players who wrote something, in random order. `turn` indexes it. */
-  order: string[];
-  turn: number;
-  claims: Claim[];
-  /** Word indexes that nobody matched by the end of their owner's turn (they failed). */
-  dead: Record<string, number[]>;
-  /** Points each player earned in the turn that just ended (result phase). */
-  turnPts: Record<string, number>;
-  /** This round's multiplied points and outcome per player. */
-  roundPts: Record<string, number>;
-  outcome: Record<string, Outcome>;
-  /** Running totals, without the Unique thinker bonus. */
-  totals: Record<string, number>;
-  /** Rounds in which the player wrote two answers and scored 0. */
-  twoZero: Record<string, number>;
-  /** Players who earned the Unique thinker bonus (set when the final starts). */
-  bonus: string[];
+  /** Half-typed answers, by player, during write only. Never in any view but the author's own. */
+  drafts: Record<string, string[]>;
+  /** Indexes of each player's words they marked as matched. */
+  matched: Record<string, number[]>;
+  /** Players who checked off Done. */
+  done: string[];
 }
 
 export interface SWView {
   phase: Phase;
-  round: number;
-  rounds: number;
-  mult: number;
+  /** The prompt's place in the pack, shown as the "chapter" on the plate. */
+  chapter: number;
   deadline: number | null;
-  /** Length of the write and call phases, for the timer ring. */
+  /** Length of the phase, for the timer ring. */
   writeMs: number;
-  callMs: number;
+  matchMs: number;
   players: string[];
   gone: string[];
   prompt: { id: string; text: string };
   /** Write: who has locked in. Never any answers. */
   locked: string[];
+  /** Match: who is done (players with nothing to match count as done). */
+  done: string[];
+  /** Only about the viewing player, and never about anyone else. */
   you: null | {
     /** Your own locked answers. */
     answers: string[] | null;
-    /** Per answer of yours: matched, or failed. */
+    /** Your own half-typed answers, to restore the inputs after a reload (write only). */
+    draft: string[] | null;
+    /** Per answer of yours: marked as matched. */
     matched: boolean[];
-    dead: boolean[];
-    /** Per answer of yours: the word of the active player you matched it with this turn. */
-    claims: (number | null)[];
+    done: boolean;
+    /** Points so far and why, live as you tap. */
+    points: number;
+    why: PointsWhy[];
   };
-  /** Call and result: whose turn it is and their words, the only other player's words anyone sees. */
-  call: null | {
-    active: string;
-    turn: number;
-    turns: number;
-    /** `matchers`: players whose word matched this one. `error`: nobody did (result only). */
-    words: { text: string; matchers: string[]; error: boolean }[];
-    /** Result only: the points each player earned in this turn. */
-    pts: Record<string, number>;
-  };
-  reveal: null | {
-    pts: Record<string, number>;
-    outcome: Record<string, Outcome>;
-  };
-  /** Totals so far, including this round's points. The bonus is added at the final. */
-  scores: Record<string, number>;
-  bonus: string[];
-  twoZero: Record<string, number>;
 }
 
 const present = (s: SWState): string[] => s.playerIds.filter((p) => !s.gone.includes(p));
-const mult = (s: SWState): number => MULTIPLIERS[Math.min(s.round, ROUNDS) - 1] ?? 1;
+
+/** A player with no words has nothing to match, so never holds the room up. */
+const isDone = (s: SWState, p: string): boolean => s.done.includes(p) || !(s.answers[p]?.length ?? 0);
+
+const matchedFlags = (s: SWState, p: string): boolean[] => (s.answers[p] ?? []).map((_, j) => (s.matched[p] ?? []).includes(j));
+const pointsOf = (s: SWState, p: string): number => basePoints(s.answers[p]?.length ?? 0, matchedFlags(s, p).filter(Boolean).length);
 
 function arm(s: SWState, ctx: GameCtx, ms: number): void {
   ctx.clearTimer('phase');
@@ -158,95 +123,36 @@ function arm(s: SWState, ctx: GameCtx, ms: number): void {
   s.deadline = ctx.now() + ms;
 }
 
-// ---------- matches ----------
-
-const isMatched = (s: SWState, p: string, j: number): boolean => s.claims.some((c) => (c.target === p && c.theirs === j) || (c.by === p && c.mine === j));
-const isDead = (s: SWState, p: string, j: number): boolean => s.dead[p]?.includes(j) ?? false;
-const matchedCount = (s: SWState, p: string): number => (s.answers[p] ?? []).filter((_, j) => isMatched(s, p, j)).length;
-
-/** Every word of every player here is matched or has failed: nothing is left to call. */
-function settled(s: SWState): boolean {
-  return present(s).every((p) => (s.answers[p] ?? []).every((_, j) => isMatched(s, p, j) || isDead(s, p, j)));
-}
-
 // ---------- phases ----------
 
-function startRound(s: SWState, ctx: GameCtx): void {
-  s.round++;
-  s.phase = 'write';
-  s.answers = {};
-  s.order = [];
-  s.turn = -1;
-  s.claims = [];
-  s.dead = {};
-  s.turnPts = {};
-  s.roundPts = {};
-  s.outcome = {};
-  arm(s, ctx, s.writeMs);
-}
-
 function endWrite(s: SWState, ctx: GameCtx): void {
-  s.order = ctx.rng.shuffle(present(s).filter((p) => s.answers[p]));
-  s.turn = -1;
-  nextTurn(s, ctx);
-}
-
-/** Opens the next player's turn, or ends the round when everyone has had one or nothing is left to match. */
-function nextTurn(s: SWState, ctx: GameCtx): void {
-  s.turn++;
-  while (s.turn < s.order.length && s.gone.includes(s.order[s.turn])) s.turn++;
-  if (s.turn >= s.order.length || settled(s)) {
-    toReveal(s, ctx);
-    return;
-  }
-  s.phase = 'call';
-  s.turnPts = {};
-  arm(s, ctx, s.callMs);
-}
-
-/** Closes the turn: unmatched words of the active player fail, and the points are paid. */
-function endTurn(s: SWState, ctx: GameCtx): void {
-  const active = s.order[s.turn];
-  (s.answers[active] ?? []).forEach((_, j) => {
-    if (!isMatched(s, active, j)) (s.dead[active] ??= []).push(j);
-  });
-  const m = mult(s);
-  s.turnPts = {};
+  // The timer ran out: a half-typed answer is submitted for whoever has not locked in.
   for (const p of s.playerIds) {
-    const now = basePoints(s.answers[p]?.length ?? 0, matchedCount(s, p)) * m;
-    const gained = now - (s.roundPts[p] ?? 0);
-    s.roundPts[p] = now;
-    s.totals[p] = (s.totals[p] ?? 0) + gained;
-    s.turnPts[p] = gained;
+    if (s.answers[p] !== undefined) continue;
+    const draft = cleanAnswers(s.drafts[p] ?? []);
+    if (draft.length) s.answers[p] = draft;
   }
-  s.phase = 'result';
-  arm(s, ctx, RESULT_MS);
+  s.drafts = {};
+  s.phase = 'match';
+  arm(s, ctx, s.matchMs);
+  checkDone(s, ctx);
 }
 
-function toReveal(s: SWState, ctx: GameCtx): void {
-  for (const p of s.playerIds) {
-    const answered = s.answers[p]?.length ?? 0;
-    s.outcome[p] = outcomeOf(answered, matchedCount(s, p));
-    if (answered === 2 && (s.roundPts[p] ?? 0) === 0) s.twoZero[p] = (s.twoZero[p] ?? 0) + 1;
-  }
-  s.phase = 'reveal';
-  arm(s, ctx, STANDINGS_MS);
+function finish(s: SWState, ctx: GameCtx): void {
+  s.phase = 'done';
+  s.deadline = 0;
+  ctx.clearTimer('phase');
 }
 
 function checkDone(s: SWState, ctx: GameCtx): void {
   if (s.phase === 'write') {
     if (present(s).every((p) => s.answers[p] !== undefined)) endWrite(s, ctx);
-  } else if (s.phase === 'call') {
-    if (s.gone.includes(s.order[s.turn]) || settled(s)) endTurn(s, ctx);
+  } else if (s.phase === 'match') {
+    if (present(s).every((p) => isDone(s, p))) finish(s, ctx);
   }
 }
 
 // ---------- the game ----------
-
-/** Totals so far for every player. The bonus is only in `bonus` once the final starts, so this is the running total until then. */
-function finalTotals(s: SWState): Record<string, number> {
-  return Object.fromEntries(s.playerIds.map((p) => [p, (s.totals[p] ?? 0) + (s.bonus.includes(p) ? UNIQUE_BONUS : 0)]));
-}
 
 export default defineGame<SWState, SWAction, SWSettings>({
   manifest: {
@@ -256,9 +162,9 @@ export default defineGame<SWState, SWAction, SWSettings>({
     minPlayers: MIN_PLAYERS,
     maxPlayers: MAX_PLAYERS,
     screen: 'optional',
-    estMinutes: 10,
+    estMinutes: 5,
   },
-  defaultSettings: { writeSeconds: WRITE_MS / 1000, callSeconds: CALL_MS / 1000 },
+  defaultSettings: { writeSeconds: WRITE_MS / 1000, matchSeconds: MATCH_MS / 1000 },
   settingsFields,
   actionSchema,
 
@@ -267,24 +173,16 @@ export default defineGame<SWState, SWAction, SWSettings>({
       playerIds: players.map((p) => p.id),
       gone: [],
       writeMs: settings.writeSeconds * 1000,
-      callMs: settings.callSeconds * 1000,
-      promptIds: ctx.rng.shuffle(PROMPTS.map((p) => p.id)).slice(0, ROUNDS),
-      round: 0,
+      matchMs: settings.matchSeconds * 1000,
+      promptId: ctx.rng.pick(PROMPTS).id,
       phase: 'write',
       deadline: 0,
       answers: {},
-      order: [],
-      turn: -1,
-      claims: [],
-      dead: {},
-      turnPts: {},
-      roundPts: {},
-      outcome: {},
-      totals: {},
-      twoZero: {},
-      bonus: [],
+      drafts: {},
+      matched: {},
+      done: [],
     };
-    startRound(s, ctx);
+    arm(s, ctx, s.writeMs);
     return s;
   },
 
@@ -296,18 +194,24 @@ export default defineGame<SWState, SWAction, SWSettings>({
         const answers = cleanAnswers(a.answers);
         if (!answers.length) return;
         s.answers[playerId] = answers;
+        delete s.drafts[playerId];
         break;
       }
+      case 'draft':
+        // Never locks in, never ends the phase, never shows in a view (only the author's own).
+        if (s.phase === 'write' && s.answers[playerId] === undefined) s.drafts[playerId] = a.answers;
+        return;
       case 'match': {
-        if (s.phase !== 'call') return;
-        const active = s.order[s.turn];
-        const mine = s.answers[playerId];
-        const theirs = s.answers[active];
-        if (playerId === active || !mine || !theirs || a.mine >= mine.length || a.theirs >= theirs.length || isDead(s, playerId, a.mine)) return;
-        const i = s.claims.findIndex((c) => c.target === active && c.by === playerId && c.mine === a.mine);
-        if (i < 0) s.claims.push({ target: active, by: playerId, mine: a.mine, theirs: a.theirs });
-        else if (s.claims[i].theirs === a.theirs) s.claims.splice(i, 1);
-        else s.claims[i].theirs = a.theirs;
+        const n = s.answers[playerId]?.length ?? 0;
+        if (s.phase !== 'match' || a.word >= n || isDone(s, playerId)) return;
+        const rest = (s.matched[playerId] ?? []).filter((j) => j !== a.word);
+        s.matched[playerId] = a.on ? [...rest, a.word].sort() : rest;
+        return;
+      }
+      case 'done': {
+        if (s.phase !== 'match' || !s.answers[playerId]?.length) return;
+        s.done = s.done.filter((p) => p !== playerId);
+        if (a.on) s.done.push(playerId);
         break;
       }
     }
@@ -317,20 +221,7 @@ export default defineGame<SWState, SWAction, SWSettings>({
   onTimer(s, ctx, key) {
     if (key !== 'phase') return;
     if (s.phase === 'write') endWrite(s, ctx);
-    else if (s.phase === 'call') endTurn(s, ctx);
-    else if (s.phase === 'result') nextTurn(s, ctx);
-    else if (s.phase === 'reveal') {
-      if (s.round < ROUNDS) startRound(s, ctx);
-      else {
-        s.bonus = s.playerIds.filter((p) => (s.twoZero[p] ?? 0) >= UNIQUE_MIN_ROUNDS);
-        s.phase = 'final';
-        arm(s, ctx, FINAL_MS);
-      }
-    } else if (s.phase === 'final') {
-      s.phase = 'done';
-      ctx.clearTimer('phase');
-      s.deadline = 0;
-    }
+    else if (s.phase === 'match') finish(s, ctx);
   },
 
   onPlayerLeave(s, ctx, playerId) {
@@ -343,66 +234,43 @@ export default defineGame<SWState, SWAction, SWSettings>({
   },
 
   view(s, viewer): SWView {
-    const me = viewer.kind === 'player' ? viewer.id : null;
-    const pr = PROMPT_BY_ID.get(s.promptIds[Math.min(s.round, ROUNDS) - 1]);
-    const turnOn = s.phase === 'call' || s.phase === 'result';
-    const active = turnOn ? s.order[s.turn] : undefined;
+    const me = viewer.kind === 'player' && s.playerIds.includes(viewer.id) ? viewer.id : null;
+    const pr = PROMPT_BY_ID.get(s.promptId);
     let you: SWView['you'] = null;
     if (me) {
-      const mine = s.answers[me] ?? [];
+      const answers = s.answers[me] ?? null;
+      const matched = matchedFlags(s, me);
       you = {
-        answers: s.answers[me] ?? null,
-        matched: mine.map((_, j) => isMatched(s, me, j)),
-        dead: mine.map((_, j) => isDead(s, me, j)),
-        claims: mine.map((_, j) => s.claims.find((c) => c.target === active && c.by === me && c.mine === j)?.theirs ?? null),
+        answers,
+        draft: s.phase === 'write' && !answers ? (s.drafts[me] ?? null) : null,
+        matched,
+        done: s.done.includes(me),
+        points: pointsOf(s, me),
+        why: answers ? pointsWhy(answers, matched) : [],
       };
     }
     return {
       phase: s.phase,
-      round: s.round,
-      rounds: ROUNDS,
-      mult: mult(s),
+      chapter: Math.max(0, PROMPTS.findIndex((p) => p.id === s.promptId)) + 1,
       deadline: s.deadline || null,
       writeMs: s.writeMs,
-      callMs: s.callMs,
+      matchMs: s.matchMs,
       players: s.playerIds,
       gone: s.gone,
       prompt: { id: pr?.id ?? '', text: pr?.text ?? '' },
       locked: s.phase === 'write' ? Object.keys(s.answers) : [],
+      done: s.phase === 'match' ? s.playerIds.filter((p) => isDone(s, p)) : [],
       you,
-      call:
-        active !== undefined
-          ? {
-              active,
-              turn: s.turn + 1,
-              turns: s.order.length,
-              words: (s.answers[active] ?? []).map((text, j) => ({
-                text,
-                matchers: [
-                  ...new Set(s.claims.flatMap((c) => (c.target === active && c.theirs === j ? [c.by] : c.by === active && c.mine === j ? [c.target] : []))),
-                ],
-                error: s.phase === 'result' && isDead(s, active, j),
-              })),
-              pts: s.phase === 'result' ? s.turnPts : {},
-            }
-          : null,
-      reveal: s.phase === 'reveal' ? { pts: s.roundPts, outcome: s.outcome } : null,
-      scores: finalTotals(s),
-      bonus: s.phase === 'final' || s.phase === 'done' ? s.bonus : [],
-      twoZero: s.phase === 'final' || s.phase === 'done' ? s.twoZero : {},
     };
   },
 
   result(s) {
     if (s.phase !== 'done') return null;
-    const scores = finalTotals(s);
-    const names = s.bonus.length;
-    return {
-      scores,
-      summary: names
-        ? `${names} Unique thinker${names > 1 ? 's' : ''} earned the +${UNIQUE_BONUS} bonus`
-        : 'Six rounds of hoping someone wrote the same thing',
-    };
+    const scores = Object.fromEntries(s.playerIds.map((p) => [p, pointsOf(s, p)]));
+    const wrote = s.playerIds.filter((p) => s.answers[p]?.length).length;
+    const scored = Object.values(scores).filter((n) => n > 0).length;
+    const prompt = PROMPT_BY_ID.get(s.promptId)?.text ?? '';
+    return { scores, summary: `${prompt}: ${scored} of ${wrote} writers found a match` };
   },
 
   bot: {
@@ -413,18 +281,14 @@ export default defineGame<SWState, SWAction, SWSettings>({
         if (v.you.answers || !rng.chance(0.6)) return null;
         const prompt = PROMPT_BY_ID.get(v.prompt.id);
         const pool = prompt && prompt.samples.length >= 2 ? prompt.samples : GENERIC_ANSWERS;
-        const n = rng.chance(0.5) ? 1 : 2;
-        const picks = rng.shuffle(pool).slice(0, n);
+        const picks = rng.shuffle(pool).slice(0, rng.chance(0.5) ? 1 : 2);
         return { type: 'submit', answers: picks.map((t) => t.slice(0, MAX_ANSWER_LEN)) };
       }
-      if (v.phase === 'call' && v.call && v.call.active !== me && v.you.answers && rng.chance(0.85)) {
-        const words = v.call.words;
-        for (let mine = 0; mine < v.you.answers.length; mine++) {
-          if (v.you.dead[mine] || v.you.claims[mine] !== null) continue;
-          const text = v.you.answers[mine];
-          const theirs = words.findIndex((w) => normalize(w.text) === normalize(text) || looselyRelated(w.text, text));
-          if (theirs >= 0) return { type: 'match', mine, theirs };
-        }
+      if (v.phase === 'match' && v.you.answers && !v.you.done) {
+        // Sometimes tap a word as matched, then check off Done.
+        const open = v.you.matched.map((m, j) => (m ? -1 : j)).filter((j) => j >= 0);
+        if (open.length && rng.chance(0.4)) return { type: 'match', word: rng.pick(open), on: true };
+        if (rng.chance(0.5)) return { type: 'done', on: true };
       }
       return null;
     },

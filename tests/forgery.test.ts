@@ -4,14 +4,14 @@ import { describe, expect, it } from 'vitest';
 import { createHarness, findLeaks, recordViews, type RoomHarness, type TestClient } from '../src/core/testkit';
 import forgery, { type ForgeryState, type ForgeryView } from '../src/games/forgery/logic';
 import { CATEGORIES } from '../src/games/forgery/content';
-import { POINTS } from '../src/games/forgery/rules';
+import { POINTS, ROLE_MS } from '../src/games/forgery/rules';
 import { GUESS_WORDS, normalizeGuess, suggestWords } from '../src/games/forgery/words';
 
 // ---------- content ----------
 
 describe('forgery content', () => {
   // Strings that appear in views: a word hidden inside one would be a false leak.
-  const viewLiterals = 'draw vote guess reveal done artist forger escaped stolen caught void category';
+  const viewLiterals = 'role draw vote guess reveal done artist forger escaped stolen caught void category';
 
   it('has enough categories and words', () => {
     expect(CATEGORIES.length).toBeGreaterThanOrEqual(30);
@@ -76,7 +76,13 @@ function rig(n: number, seed = 1): Rig {
 
 const STROKE = { type: 'stroke', stroke: { c: '#ffffff', w: 14, p: [10, 10, 200, 150] } };
 
+/** Lets the role card run its 5 seconds. */
+function toDraw(r: Rig): void {
+  r.h.runUntil(() => r.st().phase !== 'role');
+}
+
 function drawAll(r: Rig): void {
+  toDraw(r);
   while (r.st().phase === 'draw') r.act(r.st().turns[r.st().turn], STROKE);
 }
 
@@ -100,6 +106,7 @@ describe('forgery rules', () => {
 
   it('ignores strokes from anyone but the current drawer', () => {
     const r = rig(3);
+    toDraw(r);
     const drawer = r.st().turns[0];
     const other = r.st().playerIds.find((id) => id !== drawer)!;
     r.act(other, STROKE);
@@ -108,8 +115,41 @@ describe('forgery rules', () => {
     expect(r.st().turn).toBe(1);
   });
 
+  it('opens every round with a timed role phase in which nobody can draw', () => {
+    const r = rig(4);
+    const s = r.st();
+    expect(s.phase).toBe('role');
+    expect(s.deadline! - r.h.clock.now()).toBe(ROLE_MS);
+    r.act(s.turns[0], STROKE);
+    expect(r.st().strokes).toHaveLength(0);
+    r.h.step();
+    expect(r.st().phase).toBe('draw');
+    expect(r.st().turn).toBe(0);
+    // every round, not just the first
+    r.h.runUntil(() => r.st().phase === 'reveal');
+    r.h.runUntil(() => r.st().round === 2);
+    expect(r.st().phase).toBe('role');
+  });
+
+  it('shows every phone its own role card: same shape for both roles, the word only to artists', () => {
+    const r = rig(4);
+    const { forger, word, playerIds } = r.st();
+    const keys = (id: string) => Object.keys((r.clients.find((c) => c.id === id)!.view() as ForgeryView).you!).sort();
+    for (const id of playerIds) {
+      const v = r.clients.find((c) => c.id === id)!.view() as ForgeryView;
+      expect(v.phase).toBe('role');
+      expect(v.you!.role).toBe(id === forger ? 'forger' : 'artist');
+      expect(v.you!.word).toBe(id === forger ? null : word);
+      expect(keys(id)).toEqual(keys(forger));
+    }
+    const tv = r.screen.view() as ForgeryView;
+    expect(tv.you).toBeNull();
+    expect(JSON.stringify(tv).toLowerCase()).not.toContain(word);
+  });
+
   it('skips a turn on timeout', () => {
     const r = rig(3);
+    toDraw(r);
     r.h.step();
     expect(r.st().strokes).toEqual([{ by: r.st().turns[0], id: null }]);
     expect(r.st().turn).toBe(1);
@@ -184,6 +224,7 @@ describe('forgery rules', () => {
 
   it('voids the round when the forger leaves, and never stalls', () => {
     const r = rig(4);
+    toDraw(r);
     const forger = r.st().forger;
     r.h.room.runHostCommand({ type: 'kick', playerId: forger });
     const s = r.st();
@@ -195,11 +236,80 @@ describe('forgery rules', () => {
 
   it('skips the drawer who leaves', () => {
     const r = rig(5);
+    toDraw(r);
     const drawer = r.st().turns[0];
     if (drawer === r.st().forger) return; // forger leaving voids the round instead (covered above)
     r.h.room.runHostCommand({ type: 'kick', playerId: drawer });
     expect(r.st().strokes[0]).toEqual({ by: drawer, id: null });
     expect(r.st().turns[r.st().turn]).not.toBe(drawer);
+  });
+
+  it('gives each player their own points lines, with a reason per source, and nobody else\'s', () => {
+    const r = rig(4);
+    drawAll(r);
+    const { forger, playerIds } = r.st();
+    const artists = playerIds.filter((id) => id !== forger);
+    voteAll(r, (v) => (v === forger ? artists[0] : forger));
+    r.act(forger, { type: 'guess', word: CATEGORIES[r.st().category].words.find((w) => w !== r.st().word)! });
+    expect(r.st().phase).toBe('reveal');
+    const mine = (id: string) => (r.clients.find((c) => c.id === id)!.view() as ForgeryView).mine;
+    for (const a of artists) {
+      expect(mine(a)).toEqual([
+        { pts: POINTS.sharpEye, why: 'you spotted the forger' },
+        { pts: POINTS.caught, why: 'the forger was caught' },
+      ]);
+    }
+    expect(mine(forger)).toEqual([]);
+    expect((r.screen.view() as ForgeryView).mine).toEqual([]);
+    // the lines add up to the points awarded
+    for (const a of artists) expect(mine(a).reduce((n, l) => n + l.pts, 0)).toBe(r.st().gain[a]);
+  });
+
+  it('says the forger escaped, with the escape bonus line', () => {
+    const r = rig(3);
+    drawAll(r);
+    const { forger, playerIds } = r.st();
+    const artists = playerIds.filter((id) => id !== forger);
+    voteAll(r, (v) => (v === artists[0] ? artists[1] : artists[0]));
+    expect(r.st().outcome).toBe('escaped');
+    expect((r.clients.find((c) => c.id === forger)!.view() as ForgeryView).mine).toEqual([{ pts: POINTS.escaped, why: 'you escaped' }]);
+  });
+
+  it('submits the forger\'s autosaved guess when time runs out, and never shows it', () => {
+    const r = rig(4);
+    drawAll(r);
+    const { forger, playerIds, word } = r.st();
+    const artists = playerIds.filter((id) => id !== forger);
+    voteAll(r, (v) => (v === forger ? artists[0] : forger));
+    r.act(forger, { type: 'draft', word });
+    r.act(artists[0], { type: 'draft', word: 'something else' }); // not the forger: ignored
+    expect(r.st().phase).toBe('guess'); // a draft never ends the phase
+    for (const c of [r.screen, ...r.clients]) expect(JSON.stringify(c.view())).not.toContain('guessDraft');
+    r.h.runUntil(() => r.st().phase === 'reveal');
+    expect(r.st().outcome).toBe('stolen');
+    expect(r.st().guess).toBe(word);
+    // a draft that is not a real word is not submitted
+    r.h.runUntil(() => r.st().round === 2);
+    drawAll(r);
+    const s2 = r.st();
+    voteAll(r, (v) => (v === s2.forger ? s2.playerIds.find((id) => id !== s2.forger)! : s2.forger));
+    r.act(s2.forger, { type: 'draft', word: 'zzzz not a word' });
+    r.h.runUntil(() => r.st().phase === 'reveal');
+    expect(r.st().guess).toBeNull();
+    expect(r.st().outcome).toBe('caught');
+  });
+
+  it('ignores a stale draft after the guess is in', () => {
+    const r = rig(3);
+    drawAll(r);
+    const { forger, playerIds } = r.st();
+    const artists = playerIds.filter((id) => id !== forger);
+    voteAll(r, (v) => (v === forger ? artists[0] : forger));
+    const wrong = CATEGORIES[r.st().category].words.find((w) => w !== r.st().word)!;
+    r.act(forger, { type: 'guess', word: wrong });
+    r.act(forger, { type: 'draft', word: r.st().word });
+    expect(r.st().guessDraft).toBeNull();
+    expect(r.st().outcome).toBe('caught');
   });
 });
 
@@ -213,7 +323,7 @@ describe('forgery secret leaks', () => {
     for (const seed of SEEDS) {
       it(`${players} players, seed ${seed}: word and forger stay hidden until they should not`, () => {
         const { records } = recordViews<ForgeryState>(forgery, { players, seed, screen: true });
-        const prePhase = (r: { state: ForgeryState }) => r.state.phase === 'draw' || r.state.phase === 'vote';
+        const prePhase = (r: { state: ForgeryState }) => r.state.phase === 'role' || r.state.phase === 'draw' || r.state.phase === 'vote';
 
         // 1. The forger never sees the word while drawing or voting.
         const forgerLeaks = findLeaks(records, (r) =>
@@ -244,6 +354,9 @@ describe('forgery secret leaks', () => {
         }
         expect(compared).toBeGreaterThan(0);
 
+        // 3b. The forger's autosaved guess is never in any view.
+        for (const r of records) expect(r.json).not.toContain('guessDraft');
+
         // 4. No word list is ever sent: the guess is typed, so nothing in a view narrows it.
         for (const r of records) expect(r.view).not.toHaveProperty('options');
       });
@@ -255,6 +368,7 @@ describe('forgery secret leaks', () => {
     const word = r.st().word;
     const forger = r.st().forger;
     const all = [r.screen, ...r.clients];
+    toDraw(r);
     while (r.st().phase === 'draw') {
       const drawer = r.st().turns[r.st().turn];
       r.act(drawer, { type: 'ink', pts: [10, 10, 40, 40, 80, 60] });

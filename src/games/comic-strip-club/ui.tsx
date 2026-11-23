@@ -4,6 +4,7 @@ import { useRef, useState } from 'preact/hooks';
 import {
   DrawingCanvas,
   PlayerChip,
+  PointsNote,
   RevealStage,
   RulesSheet,
   StrokeView,
@@ -12,6 +13,7 @@ import {
   playerOf,
   sfx,
   useAssets,
+  useDraft,
   useServerNow,
   useSfxCount,
   useSfxCue,
@@ -104,19 +106,6 @@ function useStripClock(startAt: number, stripMs: number, count: number) {
   if (t < 0) return { idx: -1, start: startAt, wait: -t };
   const idx = Math.min(count - 1, Math.floor(t / stripMs));
   return { idx, start: startAt + idx * stripMs, wait: 0 };
-}
-
-function Standings({ view, lobby, me, size }: { view: CscView; lobby: Lobby; me?: string; size?: string }) {
-  const ids = [...view.players].sort((a, b) => (view.scores?.[b] ?? 0) - (view.scores?.[a] ?? 0));
-  return (
-    <ul class="g-list cs-standings">
-      {ids.map((id) => (
-        <li key={id}>
-          <PlayerChip lobby={lobby} id={id} you={id === me} size={size} trailing={`+${view.scores?.[id] ?? 0}`} />
-        </li>
-      ))}
-    </ul>
-  );
 }
 
 function Progress({ view, lobby }: { view: CscView; lobby: Lobby }) {
@@ -239,9 +228,10 @@ function RemixView({ view, assets, lobby, screen }: { view: CscView; assets: Ass
   );
 }
 
+/** The best strips and their votes. The TV shows three; a phone with no TV shows the winner. */
 function Tally({ view, assets, lobby, screen }: { view: CscView; assets: AssetMap; lobby: Lobby; screen: boolean }) {
   const strips = [...(view.strips ?? [])].sort((a, b) => (view.counts?.[b.id] ?? 0) - (view.counts?.[a.id] ?? 0));
-  const shown = strips.slice(0, screen ? 3 : 2);
+  const shown = strips.slice(0, screen ? 3 : 1);
   return (
     <section class={screen ? 'cs-stage' : 'g-stack'}>
       <p class="g-title">The votes are in</p>
@@ -261,40 +251,36 @@ function Tally({ view, assets, lobby, screen }: { view: CscView; assets: AssetMa
 
 function PromptStep({ view, send }: { view: CscView; send(a: CscAction): void }) {
   const [text, setText] = useState('');
-  const sent = view.you?.submitted;
+  const sent = !!view.you?.submitted;
   const clean = text.trim();
+  useDraft(text, (t) => send({ type: 'draft', text: t.trim() }), { deadline: view.deadline, enabled: !sent });
   return (
     <>
       <section class="g-stack cs-body">
         <div class="g-spread">
-          <span class="eyebrow">Step 1 · Write a premise</span>
+          <span class="eyebrow">Write a comic idea</span>
           <Timer deadline={view.deadline} total={view.promptMs} />
         </div>
-        <Caption>Write the idea for a comic. Another player will draw the first panel.</Caption>
         <textarea
           class="input cs-text"
           rows={4}
           maxLength={MAX_PROMPT_CHARS}
           placeholder="A snail opens a delivery company…"
+          aria-label="Comic idea"
           value={text}
           disabled={sent}
           onInput={(e) => setText((e.target as HTMLTextAreaElement).value)}
         />
-        <div class="g-spread">
-          <span class="g-muted">
-            {text.length}/{MAX_PROMPT_CHARS}
-          </span>
-          <button type="button" class="btn btn-s" disabled={sent} onClick={() => setText(PREMISES[Math.floor(Math.random() * PREMISES.length)])}>
-            Random premise
-          </button>
-        </div>
+        <button type="button" class="btn btn-s cs-random" disabled={sent} onClick={() => setText(PREMISES[Math.floor(Math.random() * PREMISES.length)])}>
+          Give me an idea
+        </button>
       </section>
       <div class="cs-dock">
         {sent ? (
-          <p class="cs-wait">Premise sent. Waiting for the other players.</p>
+          <p class="cs-wait">Sent. Waiting for the others.</p>
         ) : (
           <button type="button" class="btn btn-primary btn-block" disabled={!clean} onClick={() => send({ type: 'prompt', text: clean })}>
-            Send premise
+            Send idea
           </button>
         )}
       </div>
@@ -314,25 +300,16 @@ function DrawStep({ view, send, assets, lobby }: { view: CscView; send(a: CscAct
     send({ type: 'panel', panel: view.round, strokes: latest.current });
   };
   const sent = you.submitted || sentRef.current;
+  useDraft(strokes, (st) => send({ type: 'draft', panel: view.round, strokes: st }), { deadline: view.deadline, enabled: !sent });
   const src = you.source;
   return (
     <>
       <section class="g-stack cs-body">
         <div class="g-spread">
-          <span class="eyebrow">Panel {view.round} of 3</span>
+          <span class="eyebrow">{src?.kind === 'prompt' ? `Draw panel 1 of ${PANELS}` : `Draw what happens next (${view.round} of ${PANELS})`}</span>
           <Timer deadline={view.deadline} total={view.drawMs} onExpire={submit} />
         </div>
-        {src?.kind === 'prompt' ? (
-          <div class="cs-source">
-            <p class="eyebrow">Draw panel 1 for this premise</p>
-            <Caption>{src.text}</Caption>
-          </div>
-        ) : (
-          <div class="cs-source">
-            <p class="eyebrow">Previous panel. Draw what happens next.</p>
-            <PanelBox asset={src?.kind === 'panel' ? src.asset : null} assets={assets} />
-          </div>
-        )}
+        {src?.kind === 'prompt' ? <Caption>{src.text}</Caption> : <PanelBox asset={src?.kind === 'panel' ? src.asset : null} assets={assets} />}
         <div class={`cs-paper${sent ? ' is-sent' : ''}`}>
           <DrawingCanvas aspect={PANEL_ASPECT} strokes={strokes} onChange={setStrokes} colors={INKS} disabled={sent} label={`Panel ${view.round}`} />
         </div>
@@ -340,12 +317,12 @@ function DrawStep({ view, send, assets, lobby }: { view: CscView; send(a: CscAct
       <div class="cs-dock">
         {sent ? (
           <>
-            <p class="cs-wait">Panel sent. Waiting for the other players.</p>
-            <Progress view={view} lobby={lobby} />
+            <p class="cs-wait">Sent. Waiting for the others.</p>
+            {!lobby.screenConnected && <Progress view={view} lobby={lobby} />}
           </>
         ) : (
           <button type="button" class="btn btn-primary btn-block" onClick={submit}>
-            {strokes.length ? 'Submit panel' : 'Skip (leave panel blank)'}
+            {strokes.length ? 'Send panel' : 'Leave it blank'}
           </button>
         )}
       </div>
@@ -353,7 +330,7 @@ function DrawStep({ view, send, assets, lobby }: { view: CscView; send(a: CscAct
   );
 }
 
-function VoteStep({ view, send, assets, lobby, me }: { view: CscView; send(a: CscAction): void; assets: AssetMap; lobby: Lobby; me: string }) {
+function VoteStep({ view, send, assets, me }: { view: CscView; send(a: CscAction): void; assets: AssetMap; me: string }) {
   const options = (view.strips ?? []).map((s) => ({
     id: s.id,
     label: s.prompt,
@@ -370,13 +347,10 @@ function VoteStep({ view, send, assets, lobby, me }: { view: CscView; send(a: Cs
   return (
     <section class="g-stack cs-body">
       <div class="g-spread">
-        <span class="eyebrow">Vote for your favourite strip</span>
+        <span class="eyebrow">Pick your favourite strip</span>
         <Timer deadline={view.deadline} total={40_000} />
       </div>
       <Vote options={options} value={view.you?.vote} onVote={(id) => send({ type: 'vote', strip: id })} label="Favourite strip" />
-      <p class="g-muted">
-        {view.voted.length} of {view.players.length - view.gone.length} voted
-      </p>
     </section>
   );
 }
@@ -400,12 +374,11 @@ function Player({ view, send, me, assets: _a, lobby }: PlayerProps<CscView, CscA
           </section>
         );
       case 'vote':
-        return <VoteStep view={view} send={send} assets={assets} lobby={lobby} me={me} />;
+        return <VoteStep view={view} send={send} assets={assets} me={me} />;
       case 'tally':
         return (
           <section class="cs-body g-stack">
-            <Tally view={view} assets={assets} lobby={lobby} screen={false} />
-            <Standings view={view} lobby={lobby} me={me} />
+            {screenOn ? <p class="g-call cs-call">Look at the screen.</p> : <Tally view={view} assets={assets} lobby={lobby} screen={false} />}
           </section>
         );
       default:
@@ -416,7 +389,18 @@ function Player({ view, send, me, assets: _a, lobby }: PlayerProps<CscView, CscA
         );
     }
   })();
-  return <div class="cs-root">{body}</div>;
+  // Where this player's points came from: theirs only, from the tally on.
+  const earned = view.you?.earned ?? [];
+  return (
+    <div class="cs-root">
+      {body}
+      {earned.length > 0 && (
+        <div class="cs-dock">
+          <PointsNote lines={earned} total={earned.length > 1 ? earned.reduce((t, l) => t + l.pts, 0) : undefined} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ---------- Screen ----------
@@ -429,8 +413,8 @@ function Screen({ view, assets: _a, lobby }: ScreenProps<CscView>) {
     case 'draw':
       return (
         <section class="cs-stage cs-center">
-          <p class="eyebrow">{view.phase === 'prompt' ? 'Round 1 · Premises' : `Panel ${view.round} of 3`}</p>
-          <p class="g-title">{view.phase === 'prompt' ? 'Write a comic premise on your phone' : 'Draw your panel on your phone'}</p>
+          <p class="eyebrow">{view.phase === 'prompt' ? 'Ideas' : `Panel ${view.round} of 3`}</p>
+          <p class="g-title">{view.phase === 'prompt' ? 'Write a comic idea on your phone' : 'Draw your panel on your phone'}</p>
           <Timer deadline={view.deadline} total={view.phase === 'prompt' ? view.promptMs : view.drawMs} size="l" />
           <Progress view={view} lobby={lobby} />
         </section>
@@ -456,10 +440,7 @@ function Screen({ view, assets: _a, lobby }: ScreenProps<CscView>) {
       );
     case 'tally':
       return (
-        <div class="cs-split">
-          <Tally view={view} assets={assets} lobby={lobby} screen />
-          <Standings view={view} lobby={lobby} size="4.5vh" />
-        </div>
+        <Tally view={view} assets={assets} lobby={lobby} screen />
       );
     default:
       return <RemixView view={view} assets={assets} lobby={lobby} screen />;

@@ -9,7 +9,7 @@ export const MAX_NAME_LENGTH = 24;
 export const MAX_TOKEN_LENGTH = 64;
 export const MAX_ID_LENGTH = 64;
 export const MAX_ASSET_REQ = 64;
-export const MAX_BOTS_PER_REQUEST = 20;
+export const MAX_BOTS_PER_REQUEST = 30; // dev only; one request can fill a room
 
 /** Trims, collapses whitespace and strips control characters. May return ''. */
 export function sanitizeName(raw: string): string {

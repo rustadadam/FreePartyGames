@@ -1,10 +1,23 @@
 // Lobby building blocks shared by the screen and phone views:
 // the player wall, the game picker, the host bar, and the selected-game card.
+import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 import type { Lobby, LobbyPlayer, Manifest } from '../../shared/types';
+import { planSeats } from '../../shared/seating';
 import { Avatar } from '../kit/Avatar';
 import type { RoomClient } from '../net/room';
 import { useGameModule } from './useGameModule';
+
+/** Avatar size for a wall of `n` players: shrinks in steps so 30 fit (screen: vh, phone: px). */
+export function wallSize(n: number, kind: 'screen' | 'phone'): string {
+  const steps = kind === 'screen' ? ([[8, 9], [14, 7.5], [22, 6.2]] as const) : ([[12, 48], [20, 42]] as const);
+  const last = kind === 'screen' ? 5.4 : 38;
+  const size = steps.find(([upTo]) => n <= upTo)?.[1] ?? last;
+  return `${size}${kind === 'screen' ? 'vh' : 'px'}`;
+}
+
+/** Past this many players the wall tightens its gaps, and the TV lobby trades the Next-up rules for room. */
+export const DENSE_WALL = 14;
 
 export function PlayerWall({
   lobby,
@@ -23,7 +36,7 @@ export function PlayerWall({
   const pickedPlayer = lobby.players.find((p) => p.id === picked);
   if (!lobby.players.length) return <p class="empty">Nobody yet. Scan the code or open the link to join.</p>;
   return (
-    <div class="wall">
+    <div class={`wall${lobby.players.length > DENSE_WALL ? ' wall-dense' : ''}`} style={{ '--punch': size } as JSX.CSSProperties}>
       <ul class="wall-grid" aria-label="Players">
         {lobby.players.map((p) => (
           <li key={p.id}>
@@ -77,22 +90,31 @@ function PlayerPunch({ p, size, me }: { p: LobbyPlayer; size: string; me: boolea
 export function startBlocker(lobby: Lobby): string | null {
   const g = lobby.games.find((m) => m.id === lobby.selectedGameId);
   if (!g) return 'Pick a game';
-  const n = lobby.players.length;
+  const plan = planSeats(lobby.players, g.maxPlayers);
+  const n = plan.seated.length + plan.watching.length;
   if (n < g.minPlayers) return `Needs ${g.minPlayers - n} more player${g.minPlayers - n === 1 ? '' : 's'}`;
-  if (n > g.maxPlayers) return `Too many players (max ${g.maxPlayers})`;
   if (g.screen === 'required' && !lobby.screenConnected) return 'This game needs the TV screen';
   return null;
+}
+
+/** "20 play, 6 watch" when the room holds more players than the selected game seats, else null. */
+export function seatingNote(lobby: Lobby): string | null {
+  const g = lobby.games.find((m) => m.id === lobby.selectedGameId);
+  if (!g) return null;
+  const { seated, watching } = planSeats(lobby.players, g.maxPlayers);
+  return watching.length ? `${seated.length} play, ${watching.length} watch` : null;
 }
 
 function playersLabel(m: Manifest): string {
   return m.minPlayers === m.maxPlayers ? `${m.minPlayers} players` : `${m.minPlayers}–${m.maxPlayers} players`;
 }
 
-export function GamePicker({ lobby, client, showRules }: { lobby: Lobby; client: RoomClient; showRules?: boolean }) {
+/** `compact`: title-only chips (the TV, where seven full cards do not fit beside a wall of players). */
+export function GamePicker({ lobby, client, showRules, compact }: { lobby: Lobby; client: RoomClient; showRules?: boolean; compact?: boolean }) {
   const sel = lobby.games.find((g) => g.id === lobby.selectedGameId);
   return (
     <>
-      <div class="picker" role="radiogroup" aria-label="Choose a game">
+      <div class={`picker${compact ? ' picker-compact' : ''}`} role="radiogroup" aria-label="Choose a game">
         {lobby.games.map((g) => {
           const on = g.id === lobby.selectedGameId;
           return (
@@ -131,7 +153,7 @@ function GameRules({ id }: { id: string }) {
 }
 
 /** The selected game: title, tagline and its Rules component (lazy). */
-export function SelectedGame({ lobby }: { lobby: Lobby }) {
+export function SelectedGame({ lobby, seating }: { lobby: Lobby; seating?: boolean }) {
   const g = lobby.games.find((m) => m.id === lobby.selectedGameId);
   const { mod } = useGameModule(g?.id ?? null);
   if (!g) return null;
@@ -145,6 +167,7 @@ export function SelectedGame({ lobby }: { lobby: Lobby }) {
       <span class="selected-meta">
         {playersLabel(g)} · about {g.estMinutes} min
       </span>
+      {seating && seatingNote(lobby) && <span class="selected-seating">{seatingNote(lobby)}</span>}
     </section>
   );
 }
@@ -164,10 +187,14 @@ export function AddBots({ client }: { client: RoomClient }) {
 
 export function StartButton({ lobby, client, label = 'Start game' }: { lobby: Lobby; client: RoomClient; label?: string }) {
   const blocker = startBlocker(lobby);
+  const note = blocker ? null : seatingNote(lobby);
   return (
-    <button type="button" class="btn btn-primary btn-block btn-start" disabled={!!blocker} onClick={() => client.host({ type: 'start' })}>
-      {blocker ?? label}
-    </button>
+    <div class="start">
+      {note && <p class="start-note">{note}</p>}
+      <button type="button" class="btn btn-primary btn-block btn-start" disabled={!!blocker} onClick={() => client.host({ type: 'start' })}>
+        {blocker ?? label}
+      </button>
+    </div>
   );
 }
 

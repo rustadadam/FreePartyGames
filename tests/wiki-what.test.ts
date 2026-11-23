@@ -46,24 +46,26 @@ describe('wiki-what secrets', () => {
 
         // Mole identity: nothing role-like in any other view until the Mole reveal.
         const moleLeaks = findLeaks(records, (r) => {
-          const hidden = r.state.phase === 'ask' || r.state.phase === 'reveal' || r.state.phase === 'accuse';
+          const hidden = ['role', 'ask', 'reveal', 'accuse'].includes(r.state.phase);
           return hidden && r.viewerKey !== moleOf(r) ? { exact: ['mole', 'moleReveal'] } : null;
         });
         expect(moleLeaks).toEqual([]);
 
         for (const r of records) {
-          if (!['ask', 'reveal', 'accuse'].includes(r.state.phase) || r.viewerKey === moleOf(r)) continue;
+          if (!['role', 'ask', 'reveal', 'accuse'].includes(r.state.phase) || r.viewerKey === moleOf(r)) continue;
           const v = r.view as WikiView;
           expect(v.you ?? {}).not.toHaveProperty('mole');
           expect(v.you ?? {}).not.toHaveProperty('answerIndex');
-          expect(v.scores).toBeNull();
+          expect(v).not.toHaveProperty('scores');
           expect(v.roundEnd).toBeNull();
+          // Points notes name sources, never the role.
+          expect(JSON.stringify(v.you?.note ?? [])).not.toMatch(/mole/i);
         }
 
         // Each non-Mole view (and the screen's) is identical whoever else the Mole is.
         let compared = 0;
         for (const r of records) {
-          if (!['ask', 'reveal', 'accuse'].includes(r.state.phase) || r.viewerKey === moleOf(r)) continue;
+          if (!['role', 'ask', 'reveal', 'accuse'].includes(r.state.phase) || r.viewerKey === moleOf(r)) continue;
           const swap = r.state.playerIds.find((id) => id !== moleOf(r) && id !== r.viewerKey);
           if (!swap) continue;
           const alt: WikiState = structuredClone(r.state);
@@ -72,6 +74,18 @@ describe('wiki-what secrets', () => {
           compared++;
         }
         expect(compared).toBeGreaterThan(0);
+
+        // The role phase: the Mole's phone says so, nobody else's does, and no view leaks a pick from the last round.
+        const roleViews = records.filter((r) => r.state.phase === 'role');
+        expect(roleViews.length).toBeGreaterThan(0);
+        for (const r of roleViews) {
+          const v = r.view as WikiView;
+          expect(v.q).toBeNull();
+          expect(v.deadline).not.toBeNull();
+          if (r.viewerKey === moleOf(r)) expect(v.you?.mole).toBe(true);
+          if (r.viewerKey !== moleOf(r)) expect(v.you?.mole).toBeUndefined();
+          if (v.you) expect(v.you.pick).toBeNull();
+        }
 
         const moleAsk = records.filter((r) => r.state.phase === 'ask' && r.viewerKey === moleOf(r));
         expect(moleAsk.length).toBeGreaterThan(0);
@@ -141,5 +155,66 @@ describe('wiki-what accusations', () => {
     h.room.runAction(mole, { type: 'accuse', target: b });
     expect(st().phase).toBe('moleReveal');
     expect(st().caught).toBe(true);
+  });
+});
+
+describe('wiki-what role phase and points notes', () => {
+  const start = (seed: number, n = 4) => {
+    const h = createHarness({ seed });
+    const ids = Array.from({ length: n }, (_, i) => h.join(`P${i + 1}`).id);
+    h.room.runHostCommand({ type: 'selectGame', gameId: 'wiki-what' });
+    h.room.runHostCommand({ type: 'start' });
+    const st = () => h.room.snapshot().game!.state as WikiState;
+    return { h, ids, st };
+  };
+  const view = (st: WikiState, id: string) => wikiWhat.view(st, { kind: 'player', id }) as WikiView;
+
+  it('opens every round with a timed role phase, before the first question', () => {
+    const { h, st } = start(11);
+    expect(st().phase).toBe('role');
+    expect(wikiWhat.view(st(), { kind: 'screen' })).toMatchObject({ q: null, you: null });
+    h.runUntil(() => st().phase === 'moleReveal');
+    h.runUntil(() => st().round === 2);
+    expect(st().phase).toBe('role');
+    expect(st().qi).toBe(0);
+  });
+
+  it('gives each player only their own point lines', () => {
+    const { h, ids, st } = start(13, 5);
+    h.runUntil(() => st().phase === 'ask');
+    const mole = st().moles[0];
+    const q = QUESTIONS.find((x) => x.id === st().qids[0])!;
+    const wrong = [0, 1, 2, 3].find((i) => i !== q.answer)!;
+    for (const id of ids) h.room.runAction(id, { type: 'pick', choice: wrong });
+    expect(st().phase).toBe('reveal');
+    // Team was wrong and the Mole earns for it, but the reveal reads the same on every phone:
+    // a Mole-only line would let anyone glancing at a phone spot the Mole.
+    for (const id of ids) expect(view(st(), id).you!.note).toEqual([]);
+    // Next question, everyone right: the same two lines for every viewer, Mole included.
+    h.runUntil(() => st().phase === 'ask' && st().qi === 1);
+    const q2 = QUESTIONS.find((x) => x.id === st().qids[1])!;
+    for (const id of ids) h.room.runAction(id, { type: 'pick', choice: q2.answer });
+    expect(new Set(ids.map((id) => JSON.stringify(view(st(), id).you!.note))).size).toBe(1);
+    expect(view(st(), ids[0]).you!.note.map((l) => l.pts)).toEqual([2, 1]);
+    // The Mole's +3 for the wrong answer is told at the Mole reveal, when everyone sees who it was.
+    h.runUntil(() => st().phase === 'moleReveal');
+    expect(view(st(), mole).you!.note).toEqual([
+      { pts: 3, why: expect.stringContaining('missed a question') },
+      { pts: 3, why: expect.stringContaining('stayed hidden') },
+    ]);
+    for (const id of ids.filter((i) => i !== mole)) expect(view(st(), id).you!.note).toEqual([]);
+  });
+
+  it('the accusation lines appear only at the Mole reveal', () => {
+    const { h, ids, st } = start(17, 5);
+    h.runUntil(() => st().phase === 'accuse');
+    const mole = st().moles[0];
+    const team = ids.filter((id) => id !== mole);
+    expect(view(st(), team[0]).you!.note).toEqual([]);
+    for (const id of team) h.room.runAction(id, { type: 'accuse', target: mole });
+    h.room.runAction(mole, { type: 'accuse', target: team[0] });
+    expect(st().phase).toBe('moleReveal');
+    expect(view(st(), team[0]).you!.note.map((l) => l.pts)).toEqual([3, 1]);
+    expect(view(st(), mole).you!.note.map((l) => l.pts)).toEqual([3]); // team line only: a caught Mole earns nothing
   });
 });

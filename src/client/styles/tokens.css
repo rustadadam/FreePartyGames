@@ -10,6 +10,11 @@
   --raffle: #ff5e87;
   --marquee: #ffd447;
 
+  /* podium steps (docs/DESIGN.md, Results) */
+  --gold: #ffd447;
+  --silver: #cfd6ea;
+  --bronze: #e09a62;
+
   /* semantic */
   --bg: var(--night);
   --surface: var(--velvet);

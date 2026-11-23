@@ -7,13 +7,14 @@ import { ManifestSchema } from '../src/shared/protocol';
 import { MAX_VIEW_BYTES } from '../src/shared/protocol';
 import { simulateGame } from '../src/core/testkit';
 import { clampSetting } from '../src/shared/settings';
+import { MAX_PLAYERS } from '../src/core/engine';
 
 const SEEDS = [1, 2, 3];
 const MAX_STEPS = 50_000;
 
 function playerCounts(min: number, max: number): number[] {
   const clamp = (n: number) => Math.min(max, Math.max(min, n));
-  return [...new Set([min, 8, 20].map(clamp))].sort((a, b) => a - b);
+  return [...new Set([min, 8, 20, max].map(clamp))].sort((a, b) => a - b);
 }
 
 describe('registries', () => {
@@ -65,6 +66,17 @@ for (const [id, def] of Object.entries(serverGames)) {
         }
       }
     }
+
+    it('seats only its own cap when the room holds 30; the rest spectate and nothing breaks', () => {
+      const roomSize = MAX_PLAYERS;
+      const screen = def.manifest.screen !== 'none';
+      const report = simulateGame(def, { players: roomSize, seed: 3, screen, maxSteps: MAX_STEPS });
+      expect(report.result).not.toBeNull();
+      expect(report.playerIds).toHaveLength(Math.min(roomSize, def.manifest.maxPlayers));
+      expect(report.harness.lobby().players).toHaveLength(roomSize);
+      expect(report.actors).toBeGreaterThanOrEqual(2);
+      for (const pid of Object.keys(report.result.scores)) expect(report.playerIds).toContain(pid);
+    });
 
     it('finishes with every setting at its smallest and at its largest', () => {
       for (const settings of ['min', 'max'] as const) {

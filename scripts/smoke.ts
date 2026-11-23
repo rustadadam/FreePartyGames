@@ -1,5 +1,7 @@
 // npm run smoke: starts `wrangler dev` locally (no account), then plays EVERY game in the
 // server registry end to end over real WebSockets: 1 screen (host) + 6 player clients.
+// SMOKE_PLAYERS=30 plays with that many players in the room (1-30): each game seats its own
+// cap and the rest spectate. SMOKE_GAMES=forgery,tap-duel plays only those games.
 // Players pick actions with the game's own bot.act() on the view they receive.
 // If no view changes for STALE_SKIP_MS the screen sends a `skip` host command (logged).
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
@@ -7,12 +9,14 @@ import { existsSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import WebSocket from 'ws';
+import { MAX_PLAYERS } from '../src/core/engine';
 import { Rng } from '../src/core/rng';
 import { serverGames } from '../src/games/registry.server';
 import type { ClientMsgInput, ServerMsg } from '../src/shared/protocol';
 import type { Lobby, Viewer } from '../src/shared/types';
 
-const PLAYERS = 6;
+const PLAYERS = Number(process.env.SMOKE_PLAYERS ?? 6);
+if (!Number.isInteger(PLAYERS) || PLAYERS < 1 || PLAYERS > MAX_PLAYERS) throw new Error(`SMOKE_PLAYERS must be 1-${MAX_PLAYERS}`);
 const BOT_INTERVAL_MS = 300;
 const STALE_SKIP_MS = 8_000;
 const GAME_TIMEOUT_MS = 240_000;
@@ -202,6 +206,7 @@ async function playGame(base: string, gameId: string, seed: number): Promise<str
 
   const screen = await join(base, code, 'Screen', 'screen');
   const players: Client[] = [];
+  const rest = (): Client[] => players.filter((p) => !screen.lobby?.inGame.includes(p.id));
   for (let i = 1; i <= PLAYERS; i++) players.push(await join(base, code, `Smoke ${i}`, 'player'));
   const all = [screen, ...players];
 
@@ -211,7 +216,17 @@ async function playGame(base: string, gameId: string, seed: number): Promise<str
 
   screen.send({ type: 'host', cmd: { type: 'selectGame', gameId } });
   screen.send({ type: 'host', cmd: { type: 'start' } });
-  await screen.waitFor((m) => m.type === 'room' && m.lobby.phase === 'playing');
+  const started = (await screen.waitFor((m) => m.type === 'room' && m.lobby.phase === 'playing')) as Extract<ServerMsg, { type: 'room' }>;
+  const seats = Math.min(PLAYERS, def.manifest.maxPlayers);
+  if (started.lobby.inGame.length !== seats) throw new Error(`expected ${seats} seated, got ${started.lobby.inGame.length}`);
+  if (PLAYERS === MAX_PLAYERS) {
+    const extra = await Client.open(base, code);
+    const refused = extra.waitFor((m) => m.type === 'error' || m.type === 'welcome');
+    extra.send({ type: 'hello', code, name: 'One too many', role: 'player' });
+    const m = await refused;
+    extra.close();
+    if (m.type !== 'error' || m.code !== 'room_full') throw new Error(`player ${PLAYERS + 1} was not refused with room_full: ${m.type}`);
+  }
 
   const rng = new Rng(seed);
   let skips = 0;
@@ -245,6 +260,10 @@ async function playGame(base: string, gameId: string, seed: number): Promise<str
       assetNote = `assets ok (${new Set(assetIds).size} ids)`;
     }
 
+    const watchers = rest();
+    const lateViews = watchers.filter((p) => p.view !== null);
+    if (lateViews.length) throw new Error(`${lateViews.length} spectator(s) were sent a game view`);
+
     const fatal = all.flatMap((c) => c.errors).filter((e) => FATAL_ERRORS.has(e.code));
     if (fatal.length) throw new Error(`server errors: ${JSON.stringify(fatal.slice(0, 5))}`);
     if (lobby.lastResult?.gameId !== gameId) throw new Error('results phase without a result for this game');
@@ -252,7 +271,7 @@ async function playGame(base: string, gameId: string, seed: number): Promise<str
     const names = new Map(lobby.players.map((p) => [p.id, p.name]));
     const scores = lobby.lastResult.ranking.map((id) => `${names.get(id) ?? id}=${lobby.lastResult!.scores[id]}`).join(', ');
     const secs = ((Date.now() - t0) / 1000).toFixed(1);
-    return `PASS ${gameId} room ${code} in ${secs}s, ${skips} skips, ${assetNote}; scores: ${scores}`;
+    return `PASS ${gameId} room ${code} in ${secs}s, ${lobby.inGame.length} seated + ${watchers.length} watching, ${skips} skips, ${assetNote}; scores: ${scores}`;
   } finally {
     clearInterval(tick);
     for (const c of all) c.close();
@@ -263,7 +282,9 @@ async function playGame(base: string, gameId: string, seed: number): Promise<str
 
 async function main(): Promise<number> {
   const base = await startWrangler();
-  const ids = Object.keys(serverGames);
+  const only = process.env.SMOKE_GAMES?.split(',').filter(Boolean);
+  const ids = Object.keys(serverGames).filter((id) => !only || only.includes(id));
+  if (!ids.length) throw new Error(`SMOKE_GAMES matched no game (have: ${Object.keys(serverGames).join(', ')})`);
   console.log(`smoke: ${ids.length} game(s): ${ids.join(', ')}; ${PLAYERS} players + 1 screen each`);
   let failures = 0;
   let seed = 1;

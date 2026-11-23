@@ -335,17 +335,6 @@
   font-family: var(--font-mono);
   font-size: var(--t-l);
 }
-.cr-champ {
-  display: grid;
-  justify-items: center;
-  gap: var(--s3);
-  text-align: center;
-}
-.cr-champ .k-avatar,
-.cr-champ > :first-child {
-  filter: drop-shadow(0 0 22px var(--accent-2));
-  animation: k-pop var(--d-pop) var(--ease-pop) both;
-}
 .cr-history {
   display: grid;
   grid-auto-flow: column;
@@ -489,7 +478,4 @@
 .cr-screen .cr-feed li {
   padding: 1vh 1vw;
   border-radius: 1.2vh;
-}
-.cr-champ.is-big {
-  padding: 3vh 0;
 }

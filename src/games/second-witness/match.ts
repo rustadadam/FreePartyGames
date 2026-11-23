@@ -1,7 +1,7 @@
 // Second Witness answer and scoring helpers. Pure TypeScript, no zod: logic.ts, the bot and the
 // tests all use these, and so can the UI. Players decide for themselves what matches; `normalize`
-// is only for de-duplicating your own two answers and for the bots.
-import { POINTS, type Outcome } from './rules';
+// is only for de-duplicating your own two answers.
+import { POINTS } from './rules';
 
 function foldWord(w: string): string {
   if (w.length <= 3 || /\d/.test(w)) return w;
@@ -46,24 +46,28 @@ export function cleanAnswers(raw: readonly string[]): string[] {
   return out;
 }
 
-/** Round points before the multiplier. `answered` is 0, 1 or 2; `witnessed` counts those answers someone else shared. */
+/** Points for a player's answers. `answered` is 0, 1 or 2; `witnessed` counts those answers they marked as matched. */
 export function basePoints(answered: number, witnessed: number): number {
   if (answered === 1) return witnessed >= 1 ? POINTS.single : 0;
   if (answered === 2) return witnessed >= 2 ? POINTS.second : witnessed === 1 ? POINTS.half : 0;
   return 0;
 }
 
-export function outcomeOf(answered: number, witnessed: number): Outcome {
-  if (answered === 0) return 'blank';
-  if (answered === 1) return witnessed >= 1 ? 'single' : 'none';
-  return witnessed >= 2 ? 'second' : witnessed === 1 ? 'half' : 'none';
+export interface PointsWhy {
+  pts: number;
+  why: string;
 }
 
-/** Whether two answers look like the same thing worded differently (one normalized text holds the other). */
-export function looselyRelated(a: string, b: string): boolean {
-  const x = normalize(a);
-  const y = normalize(b);
-  if (!x || !y || x === y) return false;
-  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
-  return short.length >= 3 && (` ${long} `).includes(` ${short} `);
+/**
+ * Where a player's points come from, one line, in plain words, for the PointsNote footer.
+ * `matched[j]` says whether answer `j` is marked as matched. No line when nothing is matched yet.
+ */
+export function pointsWhy(answers: readonly string[], matched: readonly boolean[]): PointsWhy[] {
+  const hit = answers.filter((_, j) => matched[j]);
+  const pts = basePoints(answers.length, hit.length);
+  if (!hit.length) return [];
+  if (answers.length === 1) return [{ pts, why: `${hit[0]} matched` }];
+  if (hit.length === 2) return [{ pts, why: `${hit[0]} and ${hit[1]} both matched` }];
+  const miss = answers.find((_, j) => !matched[j]);
+  return [{ pts, why: `${hit[0]} matched, ${miss} did not` }];
 }

@@ -7,6 +7,8 @@ export const MAX_PLAYERS = 20;
 export const MAX_ROUNDS = 4;
 export const LAPS = 2;
 
+/** The private role card every round opens with: nobody draws before seeing their role. */
+export const ROLE_MS = 5_000;
 /** Default drawing turn (the host can change it). */
 export const TURN_MS = 25_000;
 export const VOTE_MS = 30_000;

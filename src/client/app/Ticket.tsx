@@ -20,7 +20,7 @@ export interface TicketProps {
   class?: string;
 }
 
-export function Ticket({ code, layout = 'vertical', noQr, maxPlayers = 20, class: cls }: TicketProps) {
+export function Ticket({ code, layout = 'vertical', noQr, maxPlayers = 30, class: cls }: TicketProps) {
   return (
     <div class={`ticket ticket-${layout}${cls ? ` ${cls}` : ''}`}>
       <div class="ticket-main">

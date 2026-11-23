@@ -29,7 +29,7 @@ const PERSIST_INTERVAL_MS = 1000;
 /** A room with no open sockets for this long is deleted. */
 export const IDLE_TTL_MS = 2 * 60 * 60 * 1000;
 const MAX_PUT_KEYS = 128;
-/** Open sockets per room: 20 players + a screen, with headroom for reconnect overlap. */
+/** Open sockets per room: 30 players + a screen, with headroom for reconnect overlap. */
 const MAX_SOCKETS = 64;
 
 interface Attachment {

@@ -4,7 +4,7 @@ import { Avatar } from '../kit/Avatar';
 import type { RoomClient } from '../net/room';
 import { ConfirmButton } from './ConfirmButton';
 import { GameStage } from './GameStage';
-import { AddBots, GamePicker, hostName, PlayerWall, SelectedGame, StartButton } from './Lobby';
+import { AddBots, GamePicker, hostName, PlayerWall, SelectedGame, StartButton, wallSize } from './Lobby';
 import { Results } from './Results';
 import { RoomMenu } from './RoomMenu';
 import { ShareButton, Ticket, TicketStub } from './Ticket';
@@ -79,7 +79,7 @@ export function PlayerView({ client, lobby, view, meId }: { client: RoomClient; 
                 meId={meId}
                 canKick={isHost}
                 onKick={(id) => client.host({ type: 'kick', playerId: id })}
-                size="48px"
+                size={wallSize(lobby.players.length, 'phone')}
               />
               {isHost && <p class="hint">Tap a player to remove them.</p>}
             </section>
@@ -92,7 +92,7 @@ export function PlayerView({ client, lobby, view, meId }: { client: RoomClient; 
                 {lobby.dev && <AddBots client={client} />}
               </section>
             ) : lobby.selectedGameId ? (
-              <SelectedGame lobby={lobby} />
+              <SelectedGame lobby={lobby} seating />
             ) : (
               <p class="waiting">Waiting for {hostName(lobby)} to pick a game.</p>
             )}
@@ -110,7 +110,7 @@ export function PlayerView({ client, lobby, view, meId }: { client: RoomClient; 
             </section>
           ))}
 
-        {lobby.phase === 'results' && <Results lobby={lobby} meId={meId} avatarSize="40px" />}
+        {lobby.phase === 'results' && <Results lobby={lobby} meId={meId} kind="phone" />}
       </main>
 
       {lobby.phase !== 'playing' && (

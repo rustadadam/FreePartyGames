@@ -527,3 +527,71 @@
   color: var(--muted);
   box-shadow: none;
 }
+
+/* ---- RoleCard ---- */
+.k-role {
+  display: grid;
+  align-content: center;
+  gap: var(--s5);
+  min-height: min(62dvh, 560px);
+}
+.k-role-card {
+  min-height: min(36dvh, 320px);
+  align-content: center;
+  text-align: center;
+}
+.k-role-card .k-prompt-head {
+  justify-content: center;
+  padding-right: 0;
+}
+.k-role-detail {
+  margin: 0;
+  font-size: var(--t-m);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.k-role-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.k-role-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  transition: transform 200ms linear;
+}
+
+/* ---- PointsNote ---- */
+.k-points {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  color: var(--muted);
+}
+.k-points li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+}
+.k-points b {
+  flex: none;
+  min-width: 3ch;
+  color: var(--highlight);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.k-points-total {
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top: 1px solid var(--line);
+}
+.k-points-l {
+  font-size: var(--t-m);
+}

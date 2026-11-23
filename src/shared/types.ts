@@ -16,6 +16,8 @@ export interface PlayerInfo {
 export interface LobbyPlayer extends PlayerInfo {
   isHost: boolean;
   connected: boolean;
+  /** Left, or disconnected past the grace period: cannot be seated in a game. Absent counts as present. */
+  away?: boolean;
   /** Cumulative across games played in this room. */
   score: number;
 }

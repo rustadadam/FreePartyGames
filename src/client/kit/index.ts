@@ -8,8 +8,11 @@ export { Vote, type VoteOption, type VoteProps } from './Vote';
 export { PromptCard, type PromptCardProps } from './PromptCard';
 export { RevealStage, type RevealStageProps } from './RevealStage';
 export { QR, type QRProps } from './QR';
+export { RoleCard, type RoleCardProps } from './RoleCard';
+export { PointsNote, type PointsLine, type PointsNoteProps } from './PointsNote';
 export { RulesSheet, type RulesSheetProps } from './RulesSheet';
 export { PlayerChip, playerOf, type PlayerChipProps } from './PlayerChip';
+export { useDraft, type UseDraftOptions } from './useDraft';
 export { useServerClock, useServerNow, useAssets, useAsset, useEphemeral } from './hooks';
 // Sound effects: games trigger cues through these, never Web Audio directly (docs/DESIGN.md, Sound).
 export {

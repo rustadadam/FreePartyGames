@@ -22,7 +22,7 @@ const ENDED: Record<EndReason, { title: string; body: string }> = {
     title: 'This room has closed',
     body: 'Rooms close after a couple of hours with nobody in them. Start a new one from the home page.',
   },
-  full: { title: 'This room is full', body: 'A room holds 20 players. Ask the host to make space, or start your own room.' },
+  full: { title: 'This room is full', body: 'A room holds 30 players. Ask the host to make space, or start your own room.' },
   screen_taken: { title: 'This room already has a TV', body: 'Another device is the big screen for this room. Join as a player instead.' },
 };
 

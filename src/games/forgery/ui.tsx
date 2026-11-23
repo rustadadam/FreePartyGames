@@ -1,16 +1,16 @@
-// Forgery UI. Phone: your secret card, the shared canvas, your one stroke, the vote.
-// Screen: the canvas in its gilt frame, the turn order, the vote and the reveal.
-// With no screen the phone shows all of that itself. Everything comes from the kit.
+// Forgery UI. Phone: the role card, your secret card, your one stroke, the vote, the reveal.
+// Screen: "check your phone", then the canvas in its gilt frame, the turn order, the vote and the
+// reveal. With no screen the phone also shows the shared parts itself. Everything comes from the kit.
 import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
-import { Avatar, DrawingCanvas, PlayerChip, PromptCard, RevealStage, RulesSheet, StrokeView, Timer, Vote, playerOf, sfx, useAssets, useEphemeral, useSfxCount, useSfxCue } from '../../client/kit';
+import { Avatar, DrawingCanvas, PlayerChip, PointsNote, PromptCard, RevealStage, RoleCard, RulesSheet, StrokeView, Timer, Vote, playerOf, sfx, useAssets, useDraft, useEphemeral, useSfxCount, useSfxCue } from '../../client/kit';
 import type { Drawing, Stroke } from '../../client/kit';
 import type { ClientGameModule, PlayerProps, ScreenProps } from '../../client/gameModule';
 import type { Lobby } from '../../shared/types';
 // Type-only import from logic.ts: a value import would pull zod and the game logic into this chunk.
 import type { ForgeryAction, ForgeryView } from './logic';
 import { GUESS_WORDS, normalizeGuess, suggestWords } from './words';
-import { ASPECT, GUESS_MS, LAPS, POINTS, REVEAL_MS, REVEAL_STEP_MS, STROKE_W, VOTE_MS } from './rules';
+import { ASPECT, GUESS_MS, LAPS, POINTS, REVEAL_MS, REVEAL_STEP_MS, ROLE_MS, STROKE_W, VOTE_MS } from './rules';
 import { play } from './sfx';
 import './ui.css';
 
@@ -96,7 +96,8 @@ function useForgeryCues(view: V) {
 }
 
 function phaseTiming(view: V): number {
-  return view.phase === 'draw' ? view.turnMs : view.phase === 'vote' ? VOTE_MS : view.phase === 'guess' ? GUESS_MS : REVEAL_MS;
+  const by = { role: ROLE_MS, draw: view.turnMs, vote: VOTE_MS, guess: GUESS_MS, reveal: REVEAL_MS, done: REVEAL_MS };
+  return by[view.phase];
 }
 
 function Bar({ view, size }: { view: V; size?: 'm' | 'l' }) {
@@ -105,6 +106,7 @@ function Bar({ view, size }: { view: V; size?: 'm' | 'l' }) {
     <div class="g-spread fg-bar">
       <span class="eyebrow">
         Round {view.round} of {view.rounds}
+        {view.phase === 'role' && ' · roles'}
         {view.phase === 'draw' && ` · lap ${lap} of ${LAPS}`}
         {view.phase === 'vote' && ' · vote'}
         {view.phase === 'guess' && ' · last chance'}
@@ -170,48 +172,57 @@ function VoteTally({ view, lobby, size = '28px' }: { view: V; lobby: Lobby; size
   );
 }
 
-function Scoreboard({ view, lobby, me, size }: { view: V; lobby: Lobby; me?: string; size?: string }) {
-  const ids = [...view.players].sort((a, b) => (view.scores[b] ?? 0) - (view.scores[a] ?? 0));
+/** This round's points, top few only (the shell's podium shows the full ranking at the end). */
+function Scoreboard({ view, lobby, me, size, max = 6 }: { view: V; lobby: Lobby; me?: string; size?: string; max?: number }) {
   const gain = view.reveal?.gain ?? {};
+  const ids = view.players.filter((id) => gain[id]).sort((a, b) => gain[b] - gain[a]);
+  if (!ids.length) return <p class="g-muted">Nobody scored this round.</p>;
   return (
     <ul class="g-list fg-scores">
-      {ids.map((id) => (
+      {ids.slice(0, max).map((id) => (
         <li key={id}>
-          <PlayerChip
-            lobby={lobby}
-            id={id}
-            you={id === me}
-            size={size}
-            trailing={
-              <>
-                {view.scores[id] ?? 0}
-                {gain[id] ? <b class="fg-gain"> +{gain[id]}</b> : null}
-              </>
-            }
-          />
+          <PlayerChip lobby={lobby} id={id} you={id === me} size={size} trailing={<b class="fg-gain">+{gain[id]}</b>} />
         </li>
       ))}
+      {ids.length > max && <li class="g-muted">+{ids.length - max} more</li>}
     </ul>
   );
 }
 
-function verdict(view: V, lobby: Lobby): string {
+/** "[Name] was the forger and escaped": the headline of the reveal ("You were ..." on the forger's own phone). */
+function headline(view: V, lobby: Lobby, me?: string): string {
   const r = view.reveal;
   if (!r) return '';
-  const accused = view.result?.accused;
-  if (r.outcome === 'void') return 'The forger left. Round skipped.';
-  if (r.outcome === 'stolen') return 'Caught, but they guessed the word and kept the fortune!';
-  if (r.outcome === 'caught') return r.guess ? 'Caught, and the guess was wrong.' : 'Caught, and out of time to guess.';
-  return accused ? `${nameOf(lobby, accused)} took the blame. The forger walks free!` : 'The vote tied. The forger walks free!';
+  const you = r.forger === me;
+  const who = you ? 'You were' : `${nameOf(lobby, r.forger)} was`;
+  if (r.outcome === 'void') return `${who} the forger and left`;
+  if (r.outcome === 'escaped') return `${who} the forger and escaped`;
+  return `${who} the forger and ${you ? 'were' : 'was'} caught`;
 }
 
-/** The motion: votes land, the wax seal stamps the forger, the word, then points. */
-function RevealPanel({ view, lobby, me, big }: { view: V; lobby: Lobby; me?: string; big?: boolean }) {
+/** The smaller second line: how the guess went, or who took the blame. */
+function detail(view: V, lobby: Lobby, me?: string): string {
+  const r = view.reveal;
+  if (!r) return '';
+  const they = r.forger === me ? 'You' : 'They';
+  if (r.outcome === 'void') return 'The round was skipped.';
+  if (r.outcome === 'stolen') return `${they} guessed the word and stole the win.`;
+  if (r.outcome === 'caught') return r.guess ? `${they} guessed “${r.guess}”, which was wrong.` : `${they} ran out of time to guess.`;
+  const accused = view.result?.accused;
+  if (!accused) return 'The vote tied, so nobody was accused.';
+  return accused === me ? 'You took the blame.' : `${nameOf(lobby, accused)} took the blame.`;
+}
+
+/**
+ * The motion: votes land, the wax seal stamps the forger, the word, then points. `full` adds the
+ * shared parts (vote tally, round points): the TV always shows them, a phone only with no TV.
+ */
+function RevealPanel({ view, lobby, me, full, big }: { view: V; lobby: Lobby; me?: string; full?: boolean; big?: boolean }) {
   const r = view.reveal;
   if (!r) return null;
   const startAt = (view.deadline ?? 0) - REVEAL_MS;
   const items: ComponentChildren[] = [];
-  if (r.outcome !== 'void') {
+  if (full && r.outcome !== 'void') {
     items.push(
       <div class="fg-rv" key="votes">
         <p class="eyebrow">The room voted</p>
@@ -219,28 +230,39 @@ function RevealPanel({ view, lobby, me, big }: { view: V; lobby: Lobby; me?: str
       </div>,
     );
   }
+  const forgerAt = items.length;
   items.push(
     <div class="fg-rv" key="forger">
-      <p class="eyebrow">The forger was</p>
       <div class="fg-seal-wrap">
-        <PlayerChip lobby={lobby} id={r.forger} size={big ? '7vh' : '44px'} you={r.forger === me} />
+        <Avatar name={nameOf(lobby, r.forger)} color={colorOf(lobby, r.forger)} size={big ? '7vh' : '44px'} />
         <span class="fg-seal" aria-label="Forged">
           FORGED
         </span>
       </div>
+      <p class="fg-verdict">{headline(view, lobby, me)}</p>
+      <p class="g-muted fg-detail">{detail(view, lobby, me)}</p>
     </div>,
     <div class="fg-rv" key="word">
       <p class="eyebrow">The word was</p>
       <p class="fg-word">{r.word}</p>
-      {r.guess && <p class="g-muted">The forger guessed “{r.guess}”.</p>}
-    </div>,
-    <div class="fg-rv" key="score">
-      <p class="fg-verdict">{verdict(view, lobby)}</p>
-      <Scoreboard view={view} lobby={lobby} me={me} size={big ? '4.4vh' : undefined} />
     </div>,
   );
+  if (full) {
+    items.push(
+      <div class="fg-rv" key="score">
+        <Scoreboard view={view} lobby={lobby} me={me} size={big ? '4.4vh' : undefined} max={big ? 3 : 6} />
+      </div>,
+    );
+  }
+  if (view.mine.length) {
+    const total = view.mine.reduce((n, l) => n + l.pts, 0);
+    items.push(
+      <div class="fg-rv" key="mine">
+        <PointsNote lines={view.mine} total={view.mine.length > 1 ? total : undefined} />
+      </div>,
+    );
+  }
   // The seal stamps on the forger; the last step stings with how the round went.
-  const forgerAt = r.outcome === 'void' ? 0 : 1;
   const sound = (i: number) => {
     if (i === forgerAt) play('stamp');
     else if (i === items.length - 1 && r.outcome !== 'void') play(r.outcome === 'caught' ? 'caught' : 'escaped');
@@ -251,40 +273,42 @@ function RevealPanel({ view, lobby, me, big }: { view: V; lobby: Lobby; me?: str
 
 // ---------- phone ----------
 
+/** The role card that opens every round. Both roles share one layout and similar line lengths. */
+function RolePage({ view }: { view: V }) {
+  const you = view.you;
+  if (!you) return <p class="fg-status">The round is about to start.</p>;
+  return (
+    <RoleCard
+      key={view.round}
+      eyebrow={`Round ${view.round} of ${view.rounds} · your role`}
+      role={you.role === 'forger' ? 'You are the Forger' : 'You are an artist'}
+      detail={`Category: ${view.category} · Word: ${you.word ?? 'none'}`}
+      deadline={view.deadline}
+      total={ROLE_MS}
+    />
+  );
+}
+
+/** A small reminder of your secret during draw and vote (both roles share one look). */
 function SecretCard({ view }: { view: V }) {
   const you = view.you;
   if (!you) return null;
-  // Both cards share one look (tone, eyebrow, footer shape), so a glance at a phone, shown or
-  // hidden, cannot tell the forger's card from an artist's.
   return (
-    <PromptCard
-      key={view.round}
-      secret
-      eyebrow="Your secret card"
-      footer={`Category · ${view.category}`}
-    >
-      {you.role === 'forger' ? (
-        <>
-          You are the forger
-          <span class="fg-card-note">You were never invited. Study the lines and draw like you belong.</span>
-        </>
-      ) : (
-        <>
-          {you.word}
-          <span class="fg-card-note">Show you know it, without making it obvious to the forger.</span>
-        </>
-      )}
+    <PromptCard secret eyebrow="Your secret" quiet>
+      {you.role === 'forger' ? 'You are the forger' : you.word}
     </PromptCard>
   );
 }
 
 /** The forger's last chance: type the word, pick it from the matches, and lock it in. One guess. */
-function GuessBox({ onGuess }: { onGuess(word: string): void }) {
+function GuessBox({ view, onGuess, onDraft }: { view: V; onGuess(word: string): void; onDraft(word: string): void }) {
   const [text, setText] = useState('');
   const [sent, setSent] = useState(false);
   const typed = normalizeGuess(text);
   const matches = suggestWords(text);
   const valid = GUESS_WORDS.includes(typed);
+  // A word typed but not yet sent is submitted when time runs out.
+  useDraft(valid ? typed : '', onDraft, { deadline: view.deadline, enabled: !sent });
   const submit = () => {
     if (!valid || sent) return;
     setSent(true);
@@ -298,22 +322,20 @@ function GuessBox({ onGuess }: { onGuess(word: string): void }) {
         submit();
       }}
     >
-      <label class="field">
-        <span class="eyebrow">Type the word</span>
-        <input
-          class="input"
-          value={text}
-          disabled={sent}
-          onInput={(e) => setText(e.currentTarget.value)}
-          maxLength={40}
-          placeholder="Start typing…"
-          autoComplete="off"
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellcheck={false}
-          enterKeyHint="go"
-        />
-      </label>
+      <input
+        class="input"
+        aria-label="The secret word"
+        value={text}
+        disabled={sent}
+        onInput={(e) => setText(e.currentTarget.value)}
+        maxLength={40}
+        placeholder="Type the word…"
+        autoComplete="off"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellcheck={false}
+        enterKeyHint="go"
+      />
       {!sent && matches.length > 0 && !(matches.length === 1 && matches[0] === typed) && (
         <ul class="fg-matches" aria-label="Matching words">
           {matches.map((w) => (
@@ -337,20 +359,32 @@ function Player({ view, send, me, lobby }: PlayerProps<V, ForgeryAction>) {
   const seated = view.players.includes(me);
   const others = view.players.filter((id) => id !== me && !view.gone.includes(id));
   const isForger = view.you?.role === 'forger';
+  // With a TV connected the phone shows only what is yours: the canvas, tally and order live there.
+  const shared = !lobby.screenConnected;
+
+  // The role card is the whole page: nothing else competes with it, and nobody draws yet.
+  if (view.phase === 'role') {
+    return (
+      <section class="g-stack fg-player">
+        <RolePage view={view} />
+      </section>
+    );
+  }
 
   let body: ComponentChildren = null;
   if (view.phase === 'draw') {
     body = (
       <>
         <p class={`fg-status${view.drawer === me ? ' is-me' : ''}`}>{drawerLine(view, lobby, me)}</p>
-        {view.drawer === me ? <MyStroke view={view} lobby={lobby} me={me} send={send} /> : <Gallery view={view} lobby={lobby} />}
-        <TurnOrder view={view} lobby={lobby} />
+        {view.drawer === me ? <MyStroke view={view} lobby={lobby} me={me} send={send} /> : shared && <Gallery view={view} lobby={lobby} />}
+        {shared && <TurnOrder view={view} lobby={lobby} />}
       </>
     );
   } else if (view.phase === 'vote') {
     body = (
       <>
-        <Gallery view={view} lobby={lobby} />
+        <p class="fg-status">Who is the forger?</p>
+        {shared && <Gallery view={view} lobby={lobby} />}
         {seated ? (
           <Vote
             label="Who is the forger?"
@@ -360,33 +394,32 @@ function Player({ view, send, me, lobby }: PlayerProps<V, ForgeryAction>) {
             options={others.map((id) => ({ id, label: nameOf(lobby, id), color: colorOf(lobby, id) }))}
           />
         ) : null}
-        <p class="g-muted fg-status">
-          {view.voted.length} of {view.players.length - view.gone.length} voted
-        </p>
+        {shared && (
+          <p class="g-muted fg-status">
+            {view.voted.length} of {view.players.length - view.gone.length} voted
+          </p>
+        )}
       </>
     );
   } else if (view.phase === 'guess') {
-    body = (
+    body = isForger ? (
       <>
-        {isForger ? (
-          <>
-            <p class="fg-status is-me">They found you. Type the word to steal the win.</p>
-            <GuessBox onGuess={(word) => send({ type: 'guess', word })} />
-          </>
-        ) : (
-          <>
-            <p class="fg-status">{nameOf(lobby, view.result?.accused)} is the forger. If they guess the word, they steal the win.</p>
-            <VoteTally view={view} lobby={lobby} />
-          </>
-        )}
-        <Gallery view={view} lobby={lobby} />
+        <p class="fg-status is-me">They found you. Type the word to steal the win.</p>
+        <GuessBox view={view} onGuess={(word) => send({ type: 'guess', word })} onDraft={(word) => send({ type: 'draft', word })} />
+        {shared && <Gallery view={view} lobby={lobby} />}
+      </>
+    ) : (
+      <>
+        <p class="fg-status">{nameOf(lobby, view.result?.accused)} is the forger. If they guess the word, they steal the win.</p>
+        {shared && <VoteTally view={view} lobby={lobby} />}
+        {shared && <Gallery view={view} lobby={lobby} />}
       </>
     );
   } else {
     body = (
       <>
-        <RevealPanel view={view} lobby={lobby} me={me} />
-        <Gallery view={view} lobby={lobby} />
+        {shared && <Gallery view={view} lobby={lobby} />}
+        <RevealPanel view={view} lobby={lobby} me={me} full={shared} />
       </>
     );
   }
@@ -404,6 +437,19 @@ function Player({ view, send, me, lobby }: PlayerProps<V, ForgeryAction>) {
 
 function Screen({ view, lobby }: ScreenProps<V>) {
   useForgeryCues(view);
+  if (view.phase === 'role') {
+    return (
+      <section class="fg-hush">
+        <Bar view={view} size="l" />
+        <div class="fg-hush-main">
+          <p class="fg-call">Everyone, check your phone</p>
+          <PromptCard size="l" eyebrow="Category" quiet>
+            {view.category}
+          </PromptCard>
+        </div>
+      </section>
+    );
+  }
   let rail: ComponentChildren;
   if (view.phase === 'draw') {
     rail = (
@@ -438,7 +484,7 @@ function Screen({ view, lobby }: ScreenProps<V>) {
       </>
     );
   } else {
-    rail = <RevealPanel view={view} lobby={lobby} big />;
+    rail = <RevealPanel view={view} lobby={lobby} full big />;
   }
   return (
     <section class="fg-screen">
@@ -456,7 +502,7 @@ function Rules() {
     <RulesSheet
       story="You and a few distinguished guests have been invited to the world's greatest art challenge. Together, you will paint the next masterpiece, one that will stun the world and make every one of you rich. But one artist was never invited. They slipped in to take your fortune. Find them, or lose it all."
       how={[
-        'Everyone gets a category, like Kitchen tools. Everyone except the forger also gets a secret word from that category. The forger sees only the category.',
+        'Each round opens with a role card on your phone for five seconds. Everyone gets a category, like Kitchen tools. Everyone except the forger also gets a secret word from that category. The forger sees only the category.',
         'Take turns drawing one line on the shared canvas, to show you know the word. Go around the table twice.',
         'Vote on who you think the forger is. The player with the most votes is accused. If votes are tied, nobody is.',
         'If the forger is accused, they get one last chance: type the word. A right guess steals the win.',

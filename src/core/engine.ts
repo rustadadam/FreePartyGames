@@ -10,12 +10,14 @@ import {
 } from '../shared/protocol';
 import type { LastResult, Lobby, LobbyPlayer, Phase, PlayerInfo, RoomMode, Viewer } from '../shared/types';
 import { normalizeCode } from '../shared/roomCode';
+import { planSeats } from '../shared/seating';
 import { clampSetting } from '../shared/settings';
 import type { AnyGame, GameCtx, GameRegistry } from './game';
 import { contentId } from './hash';
 import { Rng } from './rng';
 
-export const MAX_PLAYERS = 20;
+/** The room holds this many players. Each game keeps its own maxPlayers; players over a game's cap spectate it. */
+export const MAX_PLAYERS = 30;
 /** A disconnected player keeps everything; after this grace they count as gone (host passes, game told). */
 export const LEAVE_GRACE_MS = 30_000;
 export const BOT_TICK_MS = 600;
@@ -24,10 +26,16 @@ const MAX_TIMER_FIRES_PER_CALL = 1000;
 /** Max serialized size of one outbound `assets` message (the platform caps a WebSocket message at 1 MiB). */
 export const MAX_ASSETS_MSG_BYTES = 256 * 1024;
 
+/**
+ * One seat color per seat, in the order seats are filled (the first eight are the most distinct).
+ * Every color reads on the night background (#1A1033) at 4.5:1 or better and keeps its initial
+ * readable with Avatar's inkOn; no two are closer than 0.08 in OKLab (tests/engine.test.ts).
+ */
 export const PLAYER_COLORS = [
-  '#ff5d5d', '#ffb13b', '#ffe14d', '#7bd85a', '#2ec4b6', '#3fa7ff', '#7a6bff', '#d46bff',
-  '#ff6bb5', '#a0522d', '#ff8c61', '#b8e04a', '#5ee0e0', '#6b8cff', '#c9a0ff', '#ff9ecb',
-  '#8fd18f', '#e0c068', '#9aa5b1', '#f2f2f2',
+  '#ff5d5d', '#3fa7ff', '#ffe14d', '#7bd85a', '#d46bff', '#ffa028', '#2ec4b6', '#ff6bb5',
+  '#ccc6e7', '#8bf9ee', '#b68554', '#a08dce', '#ea9a9a', '#aedaa9', '#f2f2f2', '#adf764',
+  '#e29aea', '#64d9f7', '#54b65d', '#5498b6', '#f316f3', '#c27091', '#16f316', '#8db4ce',
+  '#16f3b1', '#6481f7', '#b6b654', '#d6fbb1', '#db57c1', '#fbcfb1',
 ];
 
 export type ConnIdentity = Viewer;
@@ -253,6 +261,7 @@ export class Room {
       score: seat.score,
       connected: seat.isBot || this.isConnected(seat.id),
       isHost: host?.kind === 'player' && host.id === seat.id,
+      away: seat.away,
     }));
     return {
       code: this.code,
@@ -574,10 +583,12 @@ export class Room {
     if (this.s.phase === 'playing') return 'A game is already running';
     const def = this.s.selectedGameId ? this.deps.games[this.s.selectedGameId] : undefined;
     if (!def) return 'Pick a game first';
-    const seats = this.s.seats.filter((p) => !p.away);
     const { minPlayers, maxPlayers, screen } = def.manifest;
-    if (seats.length < minPlayers) return `Needs at least ${minPlayers} players`;
-    if (seats.length > maxPlayers) return `At most ${maxPlayers} players`;
+    // The room may hold more players than this game: the first maxPlayers by planSeats play, the rest spectate.
+    const seated = new Set(planSeats(this.getLobby().players, maxPlayers).seated.map((p) => p.id));
+    const seats = this.s.seats.filter((p) => seated.has(p.id));
+    const present = this.s.seats.filter((p) => !p.away).length;
+    if (present < minPlayers) return `Needs at least ${minPlayers} players`;
     if (screen === 'required' && !(this.s.screen && this.isConnected('screen'))) return 'This game needs a screen';
 
     this.endGame();

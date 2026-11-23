@@ -157,3 +157,118 @@ describe('comic-strip-club content', () => {
     for (const p of PREMISES) expect(p.length).toBeLessThanOrEqual(120);
   });
 });
+
+describe('comic-strip-club drafts (autosave)', () => {
+  const draw = (w: number) => [{ c: '#14101f', w, p: [10, 10, 300, 300] }];
+
+  function start(n = 4) {
+    const f = fakeCtx();
+    const s = game.setup(f.ctx, roster(n), game.defaultSettings);
+    f.setState(s);
+    return { s, f };
+  }
+  const submitAll = (s: CscState, f: ReturnType<typeof fakeCtx>, except: string[], act: (p: string, i: number) => Parameters<typeof game.onAction>[3]) =>
+    ids(s.playerIds.length).forEach((p, i) => !except.includes(p) && game.onAction(s, f.ctx, p, act(p, i)));
+
+  it('a premise draft is submitted when the timer runs out; no draft falls back to a random premise', () => {
+    const { s, f } = start();
+    game.onAction(s, f.ctx, 'p0', { type: 'draft', text: 'half a prem' });
+    game.onAction(s, f.ctx, 'p0', { type: 'draft', text: 'half a premise' }); // latest wins
+    expect(s.inbox).toEqual({}); // a draft is never "done"
+    submitAll(s, f, ['p0', 'p1'], (_p, i) => ({ type: 'prompt', text: `premise ${i}` }));
+    f.fire('round');
+    expect(s.round).toBe(1);
+    expect(s.chains[0]).toMatchObject({ prompt: 'half a premise', auto: false });
+    expect(s.chains[1].auto).toBe(true);
+    expect(PREMISES).toContain(s.chains[1].prompt);
+  });
+
+  it('a panel draft is submitted when the timer runs out; no draft stays a blank panel', () => {
+    const { s, f } = start();
+    submitAll(s, f, [], (_p, i) => ({ type: 'prompt', text: `premise ${i}` }));
+    expect(s.phase).toBe('draw');
+    game.onAction(s, f.ctx, 'p0', { type: 'draft', panel: 1, strokes: draw(8) });
+    expect(s.phase).toBe('draw');
+    expect(s.inbox).toEqual({});
+    f.fire('round');
+    // round 1: player p works chain (p - 1) mod n
+    expect(s.chains[chainFor(4, 1, 0)].panels[0].by).toBe('p0');
+    expect(s.chains[chainFor(4, 1, 0)].panels[0].asset).not.toBeNull();
+    expect(s.chains[chainFor(4, 1, 1)].panels[0].asset).toBeNull();
+    expect(s.drafts).toEqual({});
+  });
+
+  it('is ignored after the player submitted, from an earlier round, in the wrong phase and when empty', () => {
+    const { s, f } = start();
+    game.onAction(s, f.ctx, 'p0', { type: 'draft', panel: 1, strokes: draw(8) }); // wrong phase
+    game.onAction(s, f.ctx, 'p0', { type: 'draft', text: '   '.trim() || undefined });
+    expect(s.drafts).toEqual({});
+    game.onAction(s, f.ctx, 'p0', { type: 'prompt', text: 'real one' });
+    game.onAction(s, f.ctx, 'p0', { type: 'draft', text: 'late draft' }); // after submit
+    expect(s.drafts).toEqual({});
+    submitAll(s, f, ['p0'], (_p, i) => ({ type: 'prompt', text: `premise ${i}` }));
+    expect(s.chains[0].prompt).toBe('real one');
+
+    // round 1 -> round 2: a draft for panel 1 arriving in round 2 is dropped; drafts reset each round
+    game.onAction(s, f.ctx, 'p1', { type: 'draft', panel: 1, strokes: draw(9) });
+    submitAll(s, f, [], (_p, i) => ({ type: 'panel', panel: 1, strokes: draw(10 + i) }));
+    expect(s.round).toBe(2);
+    expect(s.drafts).toEqual({});
+    game.onAction(s, f.ctx, 'p1', { type: 'draft', panel: 1, strokes: draw(11) });
+    game.onAction(s, f.ctx, 'p2', { type: 'draft', panel: 2, strokes: [] });
+    expect(s.drafts).toEqual({});
+    // a draft sent after the real panel does not replace it
+    game.onAction(s, f.ctx, 'p3', { type: 'panel', panel: 2, strokes: draw(12) });
+    const mine = s.inbox.p3;
+    game.onAction(s, f.ctx, 'p3', { type: 'draft', panel: 2, strokes: draw(13) });
+    expect(s.drafts).toEqual({});
+    expect(s.inbox.p3).toBe(mine);
+  });
+
+  it('a leaver’s draft is not lost when the round ends early', () => {
+    const { s, f } = start();
+    game.onAction(s, f.ctx, 'p2', { type: 'draft', text: 'my last words' });
+    submitAll(s, f, ['p2'], (_p, i) => ({ type: 'prompt', text: `premise ${i}` }));
+    game.onPlayerLeave!(s, f.ctx, 'p2');
+    expect(s.chains[2].prompt).toBe('my last words');
+  });
+
+  it('drafts never appear in any view, and draft limits match the submit limits', () => {
+    const { s, f } = start();
+    game.onAction(s, f.ctx, 'p0', { type: 'draft', text: 'SECRET DRAFT TEXT' });
+    const viewers = [...ids(4).map((id) => ({ kind: 'player' as const, id })), { kind: 'screen' as const }];
+    for (const v of viewers) expect(JSON.stringify(game.view(s, v as never))).not.toContain('SECRET DRAFT TEXT');
+    const ok = (a: unknown) => game.actionSchema.safeParse(a).success;
+    expect(ok({ type: 'draft', text: 'x'.repeat(121) })).toBe(false);
+    expect(ok({ type: 'draft', panel: 1, strokes: [{ c: 'red', w: 6, p: [1, 1, 2, 2] }] })).toBe(false);
+    expect(ok({ type: 'draft', text: 'fine' })).toBe(true);
+  });
+});
+
+describe('comic-strip-club points reasons', () => {
+  it('each player is told where their points came from, only their own, only from the tally', () => {
+    const { s, f } = playToVote(4);
+    expect((game.view(s, { kind: 'player', id: 'p0' } as never) as CscView).you?.earned).toBeNull();
+    for (const p of ['p0', 'p2', 'p3']) game.onAction(s, f.ctx, p, { type: 'vote', strip: 'p1' });
+    game.onAction(s, f.ctx, 'p1', { type: 'vote', strip: 'p0' });
+    expect(s.phase).toBe('tally');
+    const v = (id: string) => (game.view(s, { kind: 'player', id } as never) as CscView).you!.earned!;
+    // p1 wrote strip p1 (3 votes) and drew a panel on strip p0 (1 vote)
+    expect(v('p1')).toEqual([
+      { pts: 100, why: '1 vote for "premise 0" (you drew panel 1)' },
+      { pts: 300, why: '3 votes for "premise 1" (you wrote the premise)' },
+    ]);
+    for (const id of ids(4)) expect(v(id).reduce((t, l) => t + l.pts, 0)).toBe(s.scores[id]);
+    expect(JSON.stringify(game.view(s, { kind: 'screen' } as never))).not.toContain('earned');
+  });
+
+  it('a blank panel or an auto-filled premise earns nothing', () => {
+    const { s, f } = playToVote(4);
+    s.chains[1].panels[0].asset = null;
+    const blankBy = s.chains[1].panels[0].by;
+    for (const p of ['p0', 'p2', 'p3']) game.onAction(s, f.ctx, p, { type: 'vote', strip: 'p1' });
+    game.onAction(s, f.ctx, 'p1', { type: 'vote', strip: 'p0' });
+    const lines = (game.view(s, { kind: 'player', id: blankBy } as never) as CscView).you!.earned!;
+    expect(lines.some((l) => l.why.includes('"premise 1"'))).toBe(false);
+  });
+});

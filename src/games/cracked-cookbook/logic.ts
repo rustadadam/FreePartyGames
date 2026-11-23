@@ -1,5 +1,6 @@
 // Cracked Cookbook: players draw ingredients and scenery (the pantry), are dealt other
-// players' drawings as stickers, cook a dish on a plate, and vote for the best one.
+// players' drawings as stickers, cook a dish on a plate (props only, no drawing), name it, and rank
+// their top three dishes.
 // Pure TypeScript: no DOM, no Cloudflare, no Math.random / Date.now.
 import { z } from 'zod';
 import { defineGame, type GameCtx } from '../../core/game';
@@ -19,11 +20,13 @@ import {
   NAME_MAX,
   PLATE_UNITS,
   PROP_PTS,
+  RANK_PTS,
+  RANK_SLOTS,
   REVEAL_LEAD_MS,
   REVEAL_STEP_MS,
-  STANDINGS_MS,
+  REVEAL_TAIL_MS,
+  TITLE_MAX,
   VOTE_MS,
-  VOTE_PTS,
 } from './rules';
 
 // ---------------------------------------------------------------- actions
@@ -42,20 +45,38 @@ const StickerSchema = z
   .strict();
 export type Sticker = z.infer<typeof StickerSchema>;
 
+const StickersSchema = z.array(StickerSchema).max(MAX_STICKERS);
+const NameSchema = z.string().max(80);
+const RoundSchema = z.number().int().min(1).max(DRAW_ROUNDS);
+const DishIdSchema = z.number().int().min(0).max(999);
+const RankingSchema = z.array(DishIdSchema).max(RANK_SLOTS);
+
 export const actionSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('prop'),
       strokes: StrokesSchema,
-      name: z.string().max(80),
+      name: NameSchema,
       /** The drawing round this prop was drawn in: a late round-1 draft must not land in round 2. */
-      round: z.number().int().min(1).max(DRAW_ROUNDS).optional(),
+      round: RoundSchema.optional(),
     })
     .strict(),
+  // The cook phase is props only: stickers and a title, no strokes.
+  z.object({ type: z.literal('dish'), stickers: StickersSchema, title: NameSchema }).strict(),
+  z.object({ type: z.literal('rank'), dishes: RankingSchema }).strict(),
+  // Autosave. Same schemas as the real submits; the phase decides which fields are read:
+  // draw: strokes + name (+ round), cook: stickers + title, vote: ranking.
   z
-    .object({ type: z.literal('dish'), strokes: StrokesSchema, stickers: z.array(StickerSchema).max(MAX_STICKERS) })
+    .object({
+      type: z.literal('draft'),
+      strokes: StrokesSchema.optional(),
+      name: NameSchema.optional(),
+      round: RoundSchema.optional(),
+      stickers: StickersSchema.optional(),
+      title: NameSchema.optional(),
+      ranking: RankingSchema.optional(),
+    })
     .strict(),
-  z.object({ type: z.literal('vote'), dish: z.number().int().min(0).max(999) }).strict(),
 ]);
 export type CookAction = z.infer<typeof actionSchema>;
 
@@ -70,21 +91,37 @@ export interface Prop {
 }
 export interface Dish {
   by: string;
-  asset: string | null;
   stickers: Sticker[];
   meal: string;
-}
-interface Sub {
-  asset: string | null;
-  stickers: Sticker[];
+  title: string;
 }
 export interface DishResult {
-  votes: number;
-  /** Points the creator earned from these votes. */
+  /** How many players put this dish 1st, 2nd and 3rd. */
+  places: number[];
+  /** Points the creator earned from those placements. */
   pts: number;
-  /** Distinct prop artists (not the creator) who earn PROP_PTS per vote. */
+  /** Distinct prop artists (not the creator) who earn PROP_PTS per placement. */
   artists: string[];
 }
+export interface PointsLine {
+  pts: number;
+  why: string;
+}
+
+interface PropDraft {
+  strokes: Stroke[];
+  name: string;
+}
+interface DishDraft {
+  stickers: Sticker[];
+  title: string;
+}
+interface Drafts {
+  props: Record<string, PropDraft>;
+  dishes: Record<string, DishDraft>;
+  ranks: Record<string, number[]>;
+}
+const emptyDrafts = (): Drafts => ({ props: {}, dishes: {}, ranks: {} });
 
 export interface CookSettings {
   /** Seconds to draw one prop. */
@@ -110,7 +147,7 @@ export interface CookState {
   /** Server ms when the current phase times out. */
   deadline: number;
   gone: string[];
-  /** Players who have acted in the current phase (draw and cook). */
+  /** Players who have submitted in the current phase (draw, cook and rank). */
   submitted: string[];
   itemPrompts: Record<string, string>;
   /** The pantry. A prop's id is its index. */
@@ -118,12 +155,16 @@ export interface CookState {
   meals: Record<string, string>;
   /** Prop indexes each player was dealt. Stickers may only use these. */
   hands: Record<string, number[]>;
-  subs: Record<string, Sub>;
+  subs: Record<string, { stickers: Sticker[]; title: string }>;
   dishes: Dish[];
-  /** voter id -> dish index. */
-  votes: Record<string, number>;
+  /** Autosaved work, never in a view. Cleared whenever a phase begins. */
+  drafts: Drafts;
+  /** voter id -> dish indexes, best first (at most RANK_SLOTS). */
+  ranks: Record<string, number[]>;
   scores: Record<string, number>;
   detail: DishResult[];
+  /** Where each player's points came from. Only the player's own lines reach a view. */
+  lines: Record<string, PointsLine[]>;
   revealAt: number;
   /** Dish indexes in reveal order (fewest points first, so the winner comes last). */
   order: number[];
@@ -133,9 +174,9 @@ export interface CookState {
 
 export interface DishView {
   id: number;
-  asset: string | null;
   stickers: Sticker[];
   meal: string;
+  title: string;
   /** Creator: only once the reveal starts. */
   by?: string;
 }
@@ -164,8 +205,13 @@ export interface CookView {
     meal: string | null;
     /** Pantry indexes this player may use as stickers. */
     hand: number[];
-    vote: number | null;
+    /** Dishes this player must rank: min(RANK_SLOTS, dishes that are not theirs). */
+    need: number;
+    /** Their submitted ranking (dish ids, best first). */
+    rank: number[];
     ownDish: number;
+    /** Reveal only: this player's own lines of points. */
+    points: PointsLine[];
   } | null;
 }
 
@@ -181,28 +227,74 @@ export function propArtists(dish: Dish, props: readonly Prop[]): string[] {
   return out;
 }
 
+/** A voter's ranking with missing dishes, their own dish and repeats dropped, at most RANK_SLOTS. */
+export function cleanRanking(list: readonly number[], dishes: readonly Dish[], voter: string): number[] {
+  const out: number[] = [];
+  for (const i of list) {
+    const d = dishes[i];
+    if (d && d.by !== voter && !out.includes(i)) out.push(i);
+    if (out.length >= RANK_SLOTS) break;
+  }
+  return out;
+}
+
+/** How many dishes a player has to rank. */
+export function rankNeed(dishes: readonly Dish[], voter: string): number {
+  return Math.min(RANK_SLOTS, dishes.filter((d) => d.by !== voter).length);
+}
+
+const ORDINAL = ['1st', '2nd', '3rd'];
+const joinNames = (names: string[]) =>
+  names.length <= 1 ? (names[0] ?? '') : names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.length} props`;
+
 /**
- * Turns votes into points. The dish creator earns VOTE_PTS per vote; every distinct prop
- * artist behind the dish (other than the creator) earns PROP_PTS per vote. Votes for a
- * missing dish or for the voter's own dish are ignored.
+ * Turns rankings into points. A dish earns its creator RANK_PTS[place] for each 1st, 2nd and
+ * 3rd placement; every distinct prop artist on the dish (other than the creator) earns PROP_PTS
+ * per placement. Rankings are cleaned first, so nobody scores from ranking their own dish.
+ * `lines` says, per player, where each point came from.
  */
 export function tally(
   dishes: readonly Dish[],
   props: readonly Prop[],
-  votes: Record<string, number>,
-): { scores: Record<string, number>; detail: DishResult[] } {
-  const scores: Record<string, number> = {};
-  const add = (id: string, n: number) => (scores[id] = (scores[id] ?? 0) + n);
-  const detail: DishResult[] = dishes.map((d) => ({ votes: 0, pts: 0, artists: propArtists(d, props) }));
-  for (const [voter, idx] of Object.entries(votes)) {
-    const d = dishes[idx];
-    if (!d || d.by === voter) continue;
-    detail[idx].votes++;
-    detail[idx].pts += VOTE_PTS;
-    add(d.by, VOTE_PTS);
-    for (const a of detail[idx].artists) add(a, PROP_PTS);
+  ranks: Record<string, number[]>,
+  names: Record<string, string> = {},
+): { scores: Record<string, number>; detail: DishResult[]; lines: Record<string, PointsLine[]> } {
+  const detail: DishResult[] = dishes.map((d) => ({ places: Array(RANK_SLOTS).fill(0), pts: 0, artists: propArtists(d, props) }));
+  for (const [voter, list] of Object.entries(ranks)) {
+    cleanRanking(list, dishes, voter).forEach((idx, place) => {
+      detail[idx].places[place]++;
+      detail[idx].pts += RANK_PTS[place];
+    });
   }
-  return { scores, detail };
+  const scores: Record<string, number> = {};
+  const lines: Record<string, PointsLine[]> = {};
+  const add = (id: string, pts: number, why: string) => {
+    scores[id] = (scores[id] ?? 0) + pts;
+    (lines[id] ??= []).push({ pts, why });
+  };
+  dishes.forEach((d, i) => {
+    const r = detail[i];
+    r.places.forEach((n, place) => {
+      if (n > 0) add(d.by, n * RANK_PTS[place], `${ORDINAL[place]} place${n > 1 ? ` from ${n} players` : ''} for ${d.title}`);
+    });
+    const placed = r.places.reduce((a, b) => a + b, 0);
+    if (!placed) return;
+    for (const artist of r.artists) {
+      const mine: string[] = [];
+      for (const st of d.stickers) {
+        const p = props[st.p];
+        if (p?.by === artist && !mine.includes(p.name)) mine.push(p.name);
+      }
+      const verb = mine.length === 1 ? 'was' : 'were';
+      add(
+        artist,
+        PROP_PTS * placed,
+        `your ${joinNames(mine)} ${verb} in ${names[d.by] ?? 'someone'}’s dish “${d.title}”${placed > 1 ? ` (ranked ${placed} times)` : ''}`,
+      );
+    }
+  });
+  for (const l of Object.values(lines)) l.sort((a, b) => b.pts - a.pts);
+  return { scores, detail, lines };
 }
 
 // ---------------------------------------------------------------- flow
@@ -213,6 +305,7 @@ function enter(s: CookState, ctx: GameCtx, phase: CookPhase, ms: number): void {
   s.phase = phase;
   s.deadline = ctx.now() + ms;
   s.submitted = [];
+  s.drafts = emptyDrafts();
   ctx.setTimer('phase', ms);
 }
 
@@ -246,34 +339,92 @@ function endDraw(s: CookState, ctx: GameCtx): void {
 function endCook(s: CookState, ctx: GameCtx): void {
   for (const id of ctx.rng.shuffle(s.playerIds)) {
     const sub = s.subs[id];
-    if (sub && (sub.asset || sub.stickers.length)) {
-      s.dishes.push({ by: id, asset: sub.asset, stickers: sub.stickers, meal: s.meals[id] ?? '' });
+    if (sub && sub.stickers.length) {
+      const meal = s.meals[id] ?? '';
+      s.dishes.push({ by: id, stickers: sub.stickers, meal, title: sub.title || meal });
     }
   }
-  if (s.dishes.length >= 2) {
-    enter(s, ctx, 'vote', VOTE_MS);
-    s.votes = {};
-  } else {
-    endVote(s, ctx);
-  }
+  if (s.dishes.length >= 2) enter(s, ctx, 'vote', VOTE_MS);
+  else endVote(s, ctx);
 }
 
 function endVote(s: CookState, ctx: GameCtx): void {
-  const { scores, detail } = tally(s.dishes, s.props, s.votes);
+  const { scores, detail, lines } = tally(s.dishes, s.props, s.ranks, s.names);
   for (const [id, n] of Object.entries(scores)) s.scores[id] = (s.scores[id] ?? 0) + n;
   s.detail = detail;
+  s.lines = lines;
   s.order = s.dishes.map((_, i) => i).sort((a, b) => detail[a].pts - detail[b].pts || a - b);
-  const total = REVEAL_LEAD_MS + s.order.length * REVEAL_STEP_MS + STANDINGS_MS;
+  // One step per dish, one closing step, then a short rest before the shell's podium.
+  const total = REVEAL_LEAD_MS + (s.order.length + 1) * REVEAL_STEP_MS + REVEAL_TAIL_MS;
   s.revealAt = ctx.now() + REVEAL_LEAD_MS;
   enter(s, ctx, 'reveal', total);
 }
 
-/** Moves on early once everyone still present has acted. */
+/** Moves on early once everyone still present has submitted. */
 function maybeAdvance(s: CookState, ctx: GameCtx): void {
   const present = activeIds(s);
-  if (s.phase === 'draw' && present.every((id) => s.submitted.includes(id))) endDraw(s, ctx);
-  else if (s.phase === 'cook' && present.every((id) => s.submitted.includes(id))) endCook(s, ctx);
-  else if (s.phase === 'vote' && present.every((id) => id in s.votes)) endVote(s, ctx);
+  if (!present.every((id) => s.submitted.includes(id))) return;
+  if (s.phase === 'draw') endDraw(s, ctx);
+  else if (s.phase === 'cook') endCook(s, ctx);
+  else if (s.phase === 'vote') endVote(s, ctx);
+}
+
+// ---------------------------------------------------------------- submits (shared by actions and drafts)
+
+function cleanTitle(raw: string): string {
+  return sanitizeName(raw).slice(0, TITLE_MAX).trim();
+}
+
+function submitProp(s: CookState, ctx: GameCtx, id: string, strokes: Stroke[], name: string): void {
+  s.submitted.push(id);
+  if (!strokes.length) return;
+  const fallback = s.itemPrompts[id] ?? 'Mystery item';
+  s.props.push({
+    asset: ctx.putAsset(makeDrawing(strokes, 1)),
+    name: sanitizeName(name).slice(0, NAME_MAX).trim() || fallback,
+    by: id,
+  });
+}
+
+function submitDish(s: CookState, id: string, stickers: Sticker[], title: string): void {
+  s.submitted.push(id);
+  const hand = s.hands[id] ?? [];
+  // Stickers must come from this player's dealt hand; anything else is dropped.
+  s.subs[id] = {
+    stickers: stickers
+      .filter((st) => hand.includes(st.p) && s.props[st.p])
+      .slice(0, MAX_STICKERS)
+      .map((st) => ({ ...st, s: Math.round(st.s * 100) / 100 })),
+    title: cleanTitle(title),
+  };
+}
+
+/** Returns false (and records nothing) for a ranking that is not a legal full ranking. */
+function submitRank(s: CookState, id: string, ranking: number[], partialOk: boolean): boolean {
+  const clean = cleanRanking(ranking, s.dishes, id);
+  if (clean.length !== ranking.length) return false; // own dish, missing dish or a repeat
+  if (!partialOk && clean.length !== rankNeed(s.dishes, id)) return false;
+  s.ranks[id] = clean;
+  s.submitted.push(id);
+  return true;
+}
+
+/** The phase ran out: whoever has a draft and has not submitted gets their latest draft submitted. */
+function submitDrafts(s: CookState, ctx: GameCtx): void {
+  for (const id of activeIds(s)) {
+    if (s.submitted.includes(id)) continue;
+    if (s.phase === 'draw') {
+      const d = s.drafts.props[id];
+      if (d) submitProp(s, ctx, id, d.strokes, d.name);
+    } else if (s.phase === 'cook') {
+      const d = s.drafts.dishes[id];
+      if (d) submitDish(s, id, d.stickers, d.title);
+    } else if (s.phase === 'vote') {
+      const d = s.drafts.ranks[id];
+      // Partial counts; a draft that breaks the rules (own dish, repeat) is skipped.
+      if (d?.length) submitRank(s, id, d, true);
+    }
+  }
 }
 
 // ---------------------------------------------------------------- bots
@@ -298,6 +449,19 @@ export function botStrokes(rng: Rng): Stroke[] {
     strokes.push({ c: rng.pick(BOT_INK), w: 14, p: sq });
   }
   return strokes;
+}
+
+function botStickers(hand: number[], rng: Rng): Sticker[] {
+  return rng
+    .shuffle(hand)
+    .slice(0, rng.int(1, 3))
+    .map((p) => ({ p, x: rng.int(250, 750), y: rng.int(250, 750), s: Math.round(rng.int(60, 160)) / 100, r: rng.int(-40, 40) }));
+}
+
+function pickRanking(v: CookView, rng: Rng): number[] {
+  const own = v.you?.ownDish ?? -1;
+  const ids = v.dishes.filter((d) => d.id !== own).map((d) => d.id);
+  return rng.shuffle(ids).slice(0, v.you?.need ?? RANK_SLOTS);
 }
 
 // ---------------------------------------------------------------- game
@@ -333,9 +497,11 @@ export default defineGame<CookState, CookAction, CookSettings>({
       hands: {},
       subs: {},
       dishes: [],
-      votes: {},
+      drafts: emptyDrafts(),
+      ranks: {},
       scores: Object.fromEntries(players.map((p) => [p.id, 0])),
       detail: [],
+      lines: {},
       revealAt: 0,
       order: [],
     };
@@ -345,43 +511,45 @@ export default defineGame<CookState, CookAction, CookSettings>({
 
   onAction(s, ctx, playerId, a) {
     if (!s.playerIds.includes(playerId) || s.gone.includes(playerId)) return;
+    // Stale (already submitted, or wrong phase): ignored without error.
+    if (s.submitted.includes(playerId)) return;
+
+    if (a.type === 'draft') {
+      // A draft never counts as done and never changes a view; the latest one wins.
+      if (s.phase === 'draw' && a.strokes) {
+        if (a.round !== undefined && a.round !== s.round) return;
+        s.drafts.props[playerId] = { strokes: a.strokes, name: a.name ?? '' };
+      } else if (s.phase === 'cook' && a.stickers) {
+        s.drafts.dishes[playerId] = { stickers: a.stickers, title: a.title ?? '' };
+      } else if (s.phase === 'vote' && a.ranking) {
+        s.drafts.ranks[playerId] = a.ranking;
+      }
+      return;
+    }
 
     if (a.type === 'prop') {
-      if (s.phase !== 'draw' || s.submitted.includes(playerId)) return;
+      if (s.phase !== 'draw') return;
       if (a.round !== undefined && a.round !== s.round) return;
-      s.submitted.push(playerId);
-      if (a.strokes.length) {
-        const fallback = s.itemPrompts[playerId] ?? 'Mystery item';
-        const name = sanitizeName(a.name).slice(0, NAME_MAX).trim() || fallback;
-        s.props.push({ asset: ctx.putAsset(makeDrawing(a.strokes, 1)), name, by: playerId });
-      }
-      maybeAdvance(s, ctx);
+      submitProp(s, ctx, playerId, a.strokes, a.name);
     } else if (a.type === 'dish') {
-      if (s.phase !== 'cook' || s.submitted.includes(playerId)) return;
-      s.submitted.push(playerId);
-      const hand = s.hands[playerId] ?? [];
-      // Stickers must come from this player's dealt hand; anything else is dropped.
-      const stickers = a.stickers
-        .filter((st) => hand.includes(st.p) && s.props[st.p])
-        .slice(0, MAX_STICKERS)
-        .map((st) => ({ ...st, s: Math.round(st.s * 100) / 100 }));
-      s.subs[playerId] = { asset: a.strokes.length ? ctx.putAsset(makeDrawing(a.strokes, 1)) : null, stickers };
-      maybeAdvance(s, ctx);
+      if (s.phase !== 'cook') return;
+      submitDish(s, playerId, a.stickers, a.title);
     } else {
-      if (s.phase !== 'vote') return;
-      const d = s.dishes[a.dish];
-      if (!d || d.by === playerId) return; // no voting for your own dish
-      s.votes[playerId] = a.dish;
-      maybeAdvance(s, ctx);
+      if (s.phase !== 'vote' || !submitRank(s, playerId, a.dishes, false)) return;
     }
+    maybeAdvance(s, ctx);
   },
 
   onTimer(s, ctx, key) {
     if (key !== 'phase') return;
+    if (s.phase === 'reveal') {
+      s.phase = 'done';
+      return;
+    }
+    submitDrafts(s, ctx);
     if (s.phase === 'draw') endDraw(s, ctx);
     else if (s.phase === 'cook') endCook(s, ctx);
     else if (s.phase === 'vote') endVote(s, ctx);
-    else if (s.phase === 'reveal') s.phase = 'done';
   },
 
   onPlayerLeave(s, ctx, playerId) {
@@ -397,10 +565,8 @@ export default defineGame<CookState, CookAction, CookSettings>({
     const me = viewer.kind === 'player' ? viewer.id : null;
     const revealed = s.phase === 'reveal' || s.phase === 'done';
     const showDishes = s.phase === 'vote' || revealed;
-    const present = activeIds(s);
-    let waiting: string[] = [];
-    if (s.phase === 'draw' || s.phase === 'cook') waiting = present.filter((id) => !s.submitted.includes(id));
-    else if (s.phase === 'vote') waiting = present.filter((id) => !(id in s.votes));
+    const open = s.phase === 'draw' || s.phase === 'cook' || s.phase === 'vote';
+    const waiting = open ? activeIds(s).filter((id) => !s.submitted.includes(id)) : [];
     return {
       phase: s.phase,
       round: s.round,
@@ -415,24 +581,25 @@ export default defineGame<CookState, CookAction, CookSettings>({
       dishes: showDishes
         ? s.dishes.map((d, i) => ({
             id: i,
-            asset: d.asset,
             stickers: d.stickers,
             meal: d.meal,
+            title: d.title,
             ...(revealed ? { by: d.by } : {}),
           }))
         : [],
       reveal: revealed ? { startAt: s.revealAt, interval: REVEAL_STEP_MS, order: s.order, detail: s.detail } : null,
       scores: revealed ? s.scores : null,
-      // The hand and prompts are the player's own business: the screen and others never get them.
+      // The hand, prompts, ranking and points are the player's own business: the screen and others never get them.
       you: me
         ? {
-            submitted:
-              s.phase === 'vote' ? me in s.votes : s.phase === 'draw' || s.phase === 'cook' ? s.submitted.includes(me) : true,
+            submitted: open ? s.submitted.includes(me) : true,
             prompt: s.phase === 'draw' ? (s.itemPrompts[me] ?? null) : null,
             meal: s.phase === 'cook' ? (s.meals[me] ?? null) : null,
             hand: s.phase === 'cook' ? (s.hands[me] ?? []) : [],
-            vote: s.votes[me] ?? null,
+            need: s.phase === 'vote' ? rankNeed(s.dishes, me) : 0,
+            rank: s.ranks[me] ?? [],
             ownDish: s.dishes.findIndex((d) => d.by === me),
+            points: revealed ? (s.lines[me] ?? []) : [],
           }
         : null,
     };
@@ -442,14 +609,12 @@ export default defineGame<CookState, CookAction, CookSettings>({
     if (s.phase !== 'done') return null;
     let best = -1;
     s.detail.forEach((d, i) => {
-      if (d.votes > 0 && (best < 0 || d.pts > s.detail[best].pts)) best = i;
+      if (d.pts > 0 && (best < 0 || d.pts > s.detail[best].pts)) best = i;
     });
     const top = best >= 0 ? s.dishes[best] : null;
     return {
       scores: { ...s.scores },
-      summary: top
-        ? `Best dish: ${s.names[top.by] ?? 'Someone'}’s ${top.meal.toLowerCase()} (${s.detail[best].votes} votes)`
-        : 'The kitchen stayed quiet',
+      summary: top ? `Best dish: ${s.names[top.by] ?? 'Someone'}’s ${top.title}` : 'The kitchen stayed quiet',
     };
   },
 
@@ -457,22 +622,21 @@ export default defineGame<CookState, CookAction, CookSettings>({
     act(view, rng) {
       const v = view as CookView;
       const you = v.you;
-      if (!you || !rng.chance(0.7)) return null;
-      if (v.phase === 'draw' && !you.submitted) {
+      if (!you || you.submitted) return null;
+      // Now and then a bot only autosaves, so the timeout path runs in the contract test too.
+      if (rng.chance(0.15)) {
+        if (v.phase === 'draw') return { type: 'draft', strokes: botStrokes(rng), name: (you.prompt ?? 'Mystery item').slice(0, NAME_MAX), round: v.round };
+        if (v.phase === 'cook') return { type: 'draft', stickers: botStickers(you.hand, rng), title: 'Draft dish' };
+        if (v.phase === 'vote') return { type: 'draft', ranking: pickRanking(v, rng).slice(0, 1) };
+      }
+      if (!rng.chance(0.7)) return null;
+      if (v.phase === 'draw') {
         return { type: 'prop', strokes: botStrokes(rng), name: (you.prompt ?? 'Mystery item').slice(0, NAME_MAX), round: v.round };
       }
-      if (v.phase === 'cook' && !you.submitted) {
-        const stickers: Sticker[] = [];
-        const picks = rng.shuffle(you.hand).slice(0, rng.int(1, 3));
-        for (const p of picks) {
-          stickers.push({ p, x: rng.int(250, 750), y: rng.int(250, 750), s: Math.round(rng.int(60, 160)) / 100, r: rng.int(-40, 40) });
-        }
-        return { type: 'dish', strokes: rng.chance(0.6) ? botStrokes(rng).slice(0, 1) : [], stickers };
+      if (v.phase === 'cook') {
+        return { type: 'dish', stickers: botStickers(you.hand, rng), title: rng.chance(0.5) ? 'Chef’s surprise' : '' };
       }
-      if (v.phase === 'vote' && you.vote === null) {
-        const options = v.dishes.filter((d) => d.id !== you.ownDish);
-        if (options.length) return { type: 'vote', dish: rng.pick(options).id };
-      }
+      if (v.phase === 'vote') return { type: 'rank', dishes: pickRanking(v, rng) };
       return null;
     },
   },
