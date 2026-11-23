@@ -170,8 +170,8 @@ describe('second-witness round scoring', () => {
 });
 
 describe('second-witness call phase', () => {
-  it('gives 30 s to write and 3 s per turn, and shows each player\'s words in turn', () => {
-    expect([WRITE_MS, CALL_MS]).toEqual([30_000, 3_000]);
+  it('gives 30 s to write and 7 s per turn, and shows each player\'s words in turn', () => {
+    expect([WRITE_MS, CALL_MS]).toEqual([30_000, 7_000]);
     const e = setup(4);
     expect(screenView(e).deadline! - e.h.clock.now()).toBe(WRITE_MS);
     submit(e, 0, 'x');
@@ -196,7 +196,7 @@ describe('second-witness call phase', () => {
       expect(screenView(e).call!.words[0].matchers).toEqual([e.ids[1 - active]]);
     }
     expect(screenView(e).call!.pts).toEqual({}); // nothing is paid until the turn ends
-    e.h.step(); // the 3 seconds are up
+    e.h.step(); // the 7 seconds are up
     const v = screenView(e);
     expect(e.st().phase).toBe('result');
     expect(v.call!.words[0].error).toBe(!paired);
@@ -230,7 +230,7 @@ describe('second-witness call phase', () => {
     [0, 1, 2].forEach((i) => submit(e, i, 'same'));
     const active = e.ids.indexOf(e.st().order[0]);
     [0, 1, 2].filter((i) => i !== active).forEach((i) => act(e, i, { type: 'match', mine: 0, theirs: 0 }));
-    expect(e.st().phase).toBe('result'); // no waiting for the 3 seconds
+    expect(e.st().phase).toBe('result'); // no waiting for the 7 seconds
     e.h.step();
     expect(e.st().phase).toBe('reveal'); // nothing left to match, so the other turns are skipped
     expect(e.ids.map((id) => e.st().roundPts[id])).toEqual([3, 3, 3]);

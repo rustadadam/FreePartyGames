@@ -14,7 +14,7 @@ export const MAX_ANSWER_LEN = 40;
 /** Time to come up with the answers (the default of the host's "Writing time" setting). */
 export const WRITE_MS = 30_000;
 /** Each player's words are up for matching this long, by default (it ends early once every word has settled). */
-export const CALL_MS = 3_000;
+export const CALL_MS = 7_000;
 /** Between turns: errors on unmatched words and the points each player just got. */
 export const RESULT_MS = 3_200;
 /** The round standings stay up this long after the last turn. */

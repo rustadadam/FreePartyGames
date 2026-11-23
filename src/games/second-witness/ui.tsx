@@ -380,7 +380,7 @@ function CallPlayer({ view, send, lobby, me }: { view: SWView; send(a: SWAction)
         <p class="sw-hint">Everyone is matching your words. Matches show up on the plates.</p>
       ) : live ? (
         <>
-          <p class="sw-hint">Drag your word onto theirs when they match, or tap one then the other. Three seconds.</p>
+          <p class="sw-hint">Drag your word onto theirs when they match, or tap one then the other. Seven seconds.</p>
           <div class="sw-words sw-mine" aria-label="Your words">
             {mine.map((text, i) => {
               const dead = you.dead[i];
@@ -634,8 +634,8 @@ function Rules() {
       story="It is an old rule that a matter is settled by the mouth of two witnesses. Here, an answer only counts if someone else wrote it too. Each round, you all get the same category, and everyone secretly writes what they think the others will write."
       how={[
         'Each round shows a category. You have 30 seconds to secretly write one or two answers, up to 40 characters each. One answer is the safe play. Two answers is the gamble.',
-        'Then the players take turns, in a random order. On your turn your words appear on every screen. Everyone else gets three seconds to say which of their own words match yours: drag your word onto theirs, or theirs onto yours. You decide what counts as a match, so be fair.',
-        'When the three seconds are up, any word that nobody matched fails with a buzz, and everyone sees the points they just earned. A failed word can no longer match. If every word is already matched, the round moves on.',
+        'Then the players take turns, in a random order. On your turn your words appear on every screen. Everyone else gets seven seconds to say which of their own words match yours: drag your word onto theirs, or theirs onto yours. You decide what counts as a match, so be fair.',
+        'When the seven seconds are up, any word that nobody matched fails with a buzz, and everyone sees the points they just earned. A failed word can no longer match. If every word is already matched, the round moves on.',
         'After the last turn you see the round standings. Later rounds are worth more.',
       ]}
       scoring={[

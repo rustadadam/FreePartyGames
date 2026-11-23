@@ -6,7 +6,7 @@
 //  - Write (30 s): each player locks in one or two answers (<= 40 chars). Two answers that normalize
 //    the same count as one. Nobody sees anyone else's answers until their turn.
 //  - Call: the players who wrote something take turns in a random order. On a player's turn their
-//    words are shown to everybody, and every other player has 3 s to say which of their own words
+//    words are shown to everybody, and every other player has 7 s to say which of their own words
 //    match (drag a word onto the other, or tap one then the other). Players decide for themselves;
 //    the game does not check. A word is matched once any claim touches it, on either side.
 //    The turn ends early when every word in the room is matched or already failed.
