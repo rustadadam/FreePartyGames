@@ -7,6 +7,7 @@ import wikiWhat from './wiki-what/logic';
 import crackedCookbook from './cracked-cookbook/logic';
 import caveRave from './cave-rave/logic';
 import secondWitness from './second-witness/logic';
+import alphabetSoup from './alphabet-soup/logic';
 
 export const serverGames: GameRegistry = {
   [tapDuel.manifest.id]: tapDuel,
@@ -16,4 +17,5 @@ export const serverGames: GameRegistry = {
   [crackedCookbook.manifest.id]: crackedCookbook,
   [caveRave.manifest.id]: caveRave,
   [secondWitness.manifest.id]: secondWitness,
+  [alphabetSoup.manifest.id]: alphabetSoup,
 };

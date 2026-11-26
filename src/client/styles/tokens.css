@@ -109,6 +109,12 @@
   --accent-2: #63d2bd;
   --stage: #261820;
 }
+[data-game='alphabet-soup'] {
+  --accent: #f2913d;
+  --accent-ink: #2a1405;
+  --accent-2: #d9475b;
+  --stage: #2a1a1f;
+}
 [data-game='cave-rave'] {
   --accent: #b76cff;
   --accent-ink: #12051f;

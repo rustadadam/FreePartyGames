@@ -185,6 +185,7 @@ says which game this is. Draw it with CSS or SVG in the game's folder; keep it t
 | Wiki-what (`wiki-what`) | Hyperlink `#7AA2FF` | Mole earth `#C58B5A` | `#17183A` | The footnote: answers carry superscript markers `[1] [2] [3]`, sources are cited in `--font-mono` under a hairline, and the Mole is marked with a "citation needed" bracket. |
 | Cave Rave (`cave-rave`) | Ultraviolet `#B76CFF` | Glowstick `#3DFFB5` | `#0B0716` | Three glowing lanes under a stalactite zigzag edge. The only game allowed glow (`box-shadow` blooms) and a near-black stage. Sabotage effects (fog, mirror, wobble) are full-lane overlays in `--accent-2`. |
 | Second Witness (`second-witness`) | Plate gold `#D8A647` | Verdigris `#63D2BD` | `#261820` | The gold plate: the prompt is a chapter heading ("Chapter 42") engraved on a riveted gold plate, your own answers are numbered like verses ("42:1", "42:2") on plates of their own, a word you tapped as matched turns verdigris with a check mark (an untapped plate stays gold), and a temple silhouette sits faintly behind the prompt. |
+| Alphabet Soup (`alphabet-soup`) | Squash `#F2913D` | Cranberry `#D9475B` | `#2A1A1F` | The bowl: your letters float as bobbing noodle tiles in your group's color above a bowl's rim; on the TV each group is a bowl outline that fills with its color when the group solves. Group colors (Red, Blue, Yellow, Green, Purple, Teal, Pink) live in `rules.ts` and always come with their name. |
 | Tap Duel (`tap-duel`, dev template) | Raffle (default) | Marquee (default) | Velvet | None: it is the plain reference. |
 
 If a game's final id differs from the table, rename the selector in `tokens.css`; don't add a
@@ -401,6 +402,7 @@ sit just under the music. Audition everything on `/dev/kit.html` (Sounds).
 | Cracked Cookbook | `serve` (service bell: a dish submitted, each dish revealed), `sticker` (a prop placed) |
 | Wiki-what | `right` / `wrong` (the answer), `mole` (the Mole unmasked) |
 | Second Witness | `witness` (a chime when you tap a word as matched) |
+| Alphabet Soup | `solved` (a spoon on a bowl: your group got its word; on the TV, each group that solves), `miss` (a soft plop on a wrong guess) |
 | Cave Rave | `advance` (the bracket moves on), `sabotage` (TV only, during the song) |
 
 Cave Rave's phones make the music, so every effect is held during the song; only the TV's

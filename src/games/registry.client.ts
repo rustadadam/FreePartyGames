@@ -11,4 +11,5 @@ export const clientGames: Record<string, () => Promise<ClientGameModule>> = {
   'cracked-cookbook': () => import('./cracked-cookbook/ui').then((m) => m.default),
   'cave-rave': () => import('./cave-rave/ui').then((m) => m.default),
   'second-witness': () => import('./second-witness/ui').then((m) => m.default),
+  'alphabet-soup': () => import('./alphabet-soup/ui').then((m) => m.default),
 };
