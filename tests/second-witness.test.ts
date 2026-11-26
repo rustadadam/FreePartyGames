@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import secondWitness, { type SWState, type SWView } from '../src/games/second-witness/logic';
 import { PROMPTS } from '../src/games/second-witness/content';
 import { basePoints, normalize, pointsWhy } from '../src/games/second-witness/match';
-import { MATCH_MS, MAX_ANSWER_LEN, POINTS, WRITE_MS } from '../src/games/second-witness/rules';
+import { MATCH_MS, MAX_ANSWER_LEN, MAX_ROUNDS, POINTS, ROUNDS, WRITE_MS } from '../src/games/second-witness/rules';
 import { createHarness, findLeaks, recordViews, simulateGame, type RoomHarness, type TestClient } from '../src/core/testkit';
 
 describe('second-witness normalization', () => {
@@ -80,11 +80,13 @@ interface Env {
   st: () => SWState;
 }
 
-function setup(n: number, seed = 1): Env {
+/** Most scenarios play a one-round game; the rounds tests pass `rounds`. */
+function setup(n: number, seed = 1, rounds = 1): Env {
   const h = createHarness({ seed });
   const screen = h.join('Screen', { role: 'screen' });
   const clients = Array.from({ length: n }, (_, i) => h.join(`P${i + 1}`));
   expect(h.room.runHostCommand({ type: 'selectGame', gameId: 'second-witness' })).toBeNull();
+  expect(h.room.runHostCommand({ type: 'setSetting', key: 'rounds', value: rounds })).toBeNull();
   expect(h.room.runHostCommand({ type: 'start' })).toBeNull();
   return { h, ids: clients.map((c) => c.id), screen, clients, st: () => h.room.snapshot().game!.state as SWState };
 }
@@ -182,9 +184,11 @@ describe('second-witness phases', () => {
     expect(e.st().phase).toBe('match');
     done(e, 1);
     expect(e.st().phase).toBe('done');
-    expect(result(e)).not.toBeNull();
+    const final = result(e);
+    expect(final).not.toBeNull();
     done(e, 1, false); // too late: the game is over
-    expect(e.st().done).toHaveLength(3);
+    expect(e.st().phase).toBe('done');
+    expect(result(e)).toEqual(final);
   });
 
   it('a player who left never blocks, and neither does one who wrote nothing', () => {
@@ -226,6 +230,46 @@ describe('second-witness phases', () => {
   it('nobody writing anything ends the game at the writing timer', () => {
     const e = setup(3);
     e.h.step();
+    expect(e.st().phase).toBe('done');
+    expect(Object.values(result(e)!.scores)).toEqual([0, 0, 0]);
+  });
+});
+
+describe('second-witness rounds', () => {
+  it('plays 5 rounds by default, each with a new prompt, and adds the points up', () => {
+    expect(ROUNDS).toBe(5);
+    expect(secondWitness.defaultSettings.rounds).toBe(5);
+    const e = setup(3, 4, ROUNDS);
+    const prompts: string[] = [];
+    for (let r = 1; r <= ROUNDS; r++) {
+      expect(screenView(e)).toMatchObject({ phase: 'write', round: r, rounds: ROUNDS });
+      prompts.push(screenView(e).prompt.id);
+      toMatch(e, [['x'], ['x'], ['y']]);
+      tap(e, 0, 0); // 3 a round for player 1, nothing for the others
+      expect(viewOf(e, 0).you).toMatchObject({ points: 3, banked: 3 * (r - 1) });
+      [0, 1, 2].forEach((i) => done(e, i));
+    }
+    expect(new Set(prompts).size).toBe(ROUNDS);
+    expect(e.st().phase).toBe('done');
+    expect(Object.values(result(e)!.scores)).toEqual([3 * ROUNDS, 0, 0]);
+    expect(result(e)!.summary).toBe(`${ROUNDS} words found a second witness over ${ROUNDS} rounds`);
+  });
+
+  it('starts each round clean: no answers, marks, Done or drafts carry over', () => {
+    const e = setup(3, 1, 2);
+    toMatch(e, [['a', 'b'], ['a'], ['c']]);
+    tap(e, 0, 0);
+    act(e, 2, { type: 'draft', answers: ['stale'] }); // a draft in the wrong phase is ignored
+    [0, 1, 2].forEach((i) => done(e, i));
+    expect(e.st()).toMatchObject({ phase: 'write', round: 2, answers: {}, matched: {}, done: [], drafts: {} });
+    expect(viewOf(e, 0).you).toMatchObject({ answers: null, draft: null, matched: [], points: 0, banked: 1 });
+  });
+
+  it('the host picks the number of rounds, and the timers still end every round', () => {
+    expect(secondWitness.settingsFields!.find((f) => f.key === 'rounds')).toMatchObject({ min: 1, max: MAX_ROUNDS, step: 1 });
+    const e = setup(3, 2, 3);
+    expect(screenView(e).rounds).toBe(3);
+    for (let i = 0; i < 3; i++) e.h.step(); // nobody writes: each round ends at its writing timer
     expect(e.st().phase).toBe('done');
     expect(Object.values(result(e)!.scores)).toEqual([0, 0, 0]);
   });

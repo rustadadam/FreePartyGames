@@ -4,6 +4,11 @@
 export const MIN_PLAYERS = 3;
 export const MAX_PLAYERS = 20;
 
+/** Rounds in a game, each with its own prompt (the default of the host's "Rounds" setting). */
+export const ROUNDS = 5;
+/** The most rounds the host can pick. */
+export const MAX_ROUNDS = 10;
+
 /** Longest answer, in characters after trimming. */
 export const MAX_ANSWER_LEN = 40;
 

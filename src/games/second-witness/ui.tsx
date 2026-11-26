@@ -2,7 +2,8 @@
 // are numbered like verses ("3:1", "3:2"), a word someone matched goes verdigris with a check, and a
 // temple silhouette sits quietly behind the prompt.
 //
-// Two pages: write (type your words) and match (your own words only; tap the ones someone matched, then Done).
+// Each round has two pages: write (type your words) and match (your own words only; tap the ones someone
+// matched, then Done). The header says which round it is and, on a phone, your points so far.
 import { useState } from 'preact/hooks';
 import { Check } from 'lucide-preact';
 import { Avatar, PointsNote, PromptCard, RulesSheet, Timer, playerOf, useDraft, useSfxCount } from '../../client/kit';
@@ -11,7 +12,7 @@ import type { Lobby } from '../../shared/types';
 // Type-only imports from logic.ts: a value import would pull zod and the game logic into this chunk.
 import type { SWAction, SWView } from './logic';
 import { normalize } from './match';
-import { MAX_ANSWER_LEN, POINTS, WRITE_MS } from './rules';
+import { MAX_ANSWER_LEN, POINTS, ROUNDS, WRITE_MS } from './rules';
 import { play } from './sfx';
 import './ui.css';
 
@@ -25,12 +26,23 @@ function Temple({ class: cls }: { class?: string }) {
 
 function Header({ view }: { view: SWView }) {
   const writing = view.phase === 'write';
+  const you = view.you;
+  // Points so far: the banked rounds, plus this round's live points while matching.
+  const sofar = you ? you.banked + (writing ? 0 : you.points) : null;
   return (
     <div class="g-spread sw-head">
       <span class="sw-head-id">
         <Temple />
-        <span class="eyebrow">{writing ? 'Writing' : 'Matching'}</span>
+        <span class="eyebrow">
+          {view.rounds > 1 ? `Round ${view.round} of ${view.rounds} · ` : ''}
+          {writing ? 'Writing' : 'Matching'}
+        </span>
       </span>
+      {sofar !== null && view.rounds > 1 && (
+        <span class="sw-sofar" aria-label={`${sofar} points so far`}>
+          {sofar} pts
+        </span>
+      )}
       <Timer deadline={view.deadline} total={writing ? view.writeMs : view.matchMs} urgentAt={writing ? 10 : 15} quiet={!writing} />
     </div>
   );
@@ -233,8 +245,9 @@ function MatchPlayer({ view, send, lobby }: { view: SWView; send(a: SWAction): v
 
 function Player({ view, send, lobby }: PlayerProps<SWView, SWAction>) {
   useSfxCount(view.phase === 'write' ? view.locked.length : view.done.length); // a tick per answer in, then per Done
-  if (view.phase === 'write') return <WritePlayer view={view} send={send} lobby={lobby} />;
-  if (view.phase === 'match' && view.you) return <MatchPlayer view={view} send={send} lobby={lobby} />;
+  // Keyed by round, so a new round always starts with empty inputs.
+  if (view.phase === 'write') return <WritePlayer key={view.round} view={view} send={send} lobby={lobby} />;
+  if (view.phase === 'match' && view.you) return <MatchPlayer key={view.round} view={view} send={send} lobby={lobby} />;
   return null; // 'done': the shell's podium takes over
 }
 
@@ -266,10 +279,11 @@ function Rules() {
     <RulesSheet
       story="It is an old rule that a matter is settled by the mouth of two witnesses. Here, an answer only counts if someone else wrote it too. You all get the same category, and each of you secretly writes what you think the others will write. Then you talk it over, and find out who stood with whom."
       how={[
+        `The game plays ${ROUNDS} rounds (the host can change this), each with a new category. Your points add up over the rounds.`,
         `A category appears and a timer starts (${WRITE_MS / 1000} seconds, unless the host changed it). Write one or two answers on your phone, up to ${MAX_ANSWER_LEN} characters each. One answer is the safe play. Two answers is the gamble.`,
         'Now go around the room. Everyone says out loud what they wrote, and who else wrote the same. Your phone shows only your own words.',
         'Tap each of your words that someone else matched. You decide what counts as a match, so be fair. The points you have earned show at the bottom as you tap.',
-        'When you are finished, tap Done. You can undo it until everyone else is done too. Once everyone is done, the game ends.',
+        'When you are finished, tap Done. You can undo it until everyone else is done too. Once everyone is done, the next round starts.',
       ]}
       scoring={[
         `One answer that someone else also wrote: ${POINTS.single} points`,

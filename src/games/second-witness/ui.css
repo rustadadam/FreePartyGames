@@ -70,6 +70,14 @@
 .sw-head {
   align-items: center;
 }
+.sw-sofar {
+  margin-left: auto;
+  margin-right: var(--s3);
+  font-family: var(--font-mono);
+  font-size: var(--t-s);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
 .sw-head-id {
   display: inline-flex;
   align-items: center;

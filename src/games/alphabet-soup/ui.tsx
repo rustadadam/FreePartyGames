@@ -273,7 +273,7 @@ function Rules() {
     <RulesSheet
       story="Someone knocked the soup pot over, and the noodle letters landed on everyone's phones. Each color is one word that got spilled, and the people who share your color hold the rest of yours. Find them before the soup gets cold."
       how={[
-        `Your phone shows your color and one or two letters. Call your color out, look at other phones, and gather everyone who shares it. Groups have 3 to 6 people, and the groups change every round.`,
+        `Your phone shows your color and one or two letters. Without saying your color, try to find the other people who share your color to form your group. Groups have 3 to 6 people, and the groups change every round.`,
         `Together your letters spell one word of up to ${MAX_WORD} letters. Every group's word has the same length this round.`,
         `Anyone in the group can type the word at the bottom of their phone. You can guess as often as you like. If a guess is wrong, your phone tells you whether it at least used your group's letters.`,
         `The round ends when every group has its word, or when time runs out (${ROUND_MS / 1000} seconds, unless the host changed it). Then all the words are shown, and new colors and letters are dealt.`,

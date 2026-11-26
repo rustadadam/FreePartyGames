@@ -1,7 +1,8 @@
 // Background music: the lobby song and one song per game, played by one device per room
 // (the TV, or the host's phone when there is no TV).
 //
-// Songs are files in /songs named `lobby.mp3` or `<game id>.mp3`. A game without a file plays
+// Songs are files in /songs named `<game id>.mp3`, or `lobby.mp3`, `lobby2.mp3`, ... for the lobby
+// (one is picked at random each time the room comes back to the lobby). A game without a file plays
 // in silence (Cave Rave: phones make their own beat). Adding a song needs no code change.
 //
 // Each song is downloaded once and played from a blob URL: Cloudflare's static assets ignore
@@ -9,7 +10,7 @@
 // between songs and across each song's loop point, through Web Audio gain nodes because iOS
 // ignores HTMLAudioElement.volume. The decks feed the shared engine's music bus, which sound
 // effects duck under big stingers (engine.ts).
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import type { Lobby } from '../../shared/types';
 import { audioCtx, bindUnlock, musicOut } from './engine';
 
@@ -21,9 +22,24 @@ const SONGS: Record<string, string> = Object.fromEntries(
   Object.entries(FILES).map(([path, url]) => [path.slice(path.lastIndexOf('/') + 1, -'.mp3'.length), url]),
 );
 
-/** The song URL for `lobby` or a game id, or null when there is none. */
+/** Lobby songs: `lobby.mp3`, `lobby2.mp3`, `lobby3.mp3`, ... (tests/songs.test.ts uses the same rule). */
+export const LOBBY_SONG = /^lobby\d*$/;
+const LOBBY_URLS = Object.keys(SONGS)
+  .filter((k) => LOBBY_SONG.test(k))
+  .sort()
+  .map((k) => SONGS[k]);
+let lastLobby: string | null = null;
+
+/** A random lobby song, never the one that played last time when there is a choice. */
+function pickLobbySong(): string | null {
+  const choices = LOBBY_URLS.length > 1 ? LOBBY_URLS.filter((u) => u !== lastLobby) : LOBBY_URLS;
+  lastLobby = choices.length ? choices[Math.floor(Math.random() * choices.length)] : null;
+  return lastLobby;
+}
+
+/** The song URL for `lobby` (a random lobby song) or a game id, or null when there is none. */
 export function songFor(key: string): string | null {
-  return SONGS[key] ?? null;
+  return key === 'lobby' ? pickLobbySong() : (SONGS[key] ?? null);
 }
 
 const VOLUME = 0.5;
@@ -219,11 +235,13 @@ export const music = new Music();
 
 /**
  * Plays the right song for this room on this device. The TV plays when there is one;
- * otherwise the host's phone does. Lobby and results use the lobby song.
+ * otherwise the host's phone does. Lobby and results share one lobby song, picked at random
+ * each time a game ends (or the room opens), so it keeps playing from results into the lobby.
  */
 export function useRoomMusic(lobby: Lobby | null, plays: boolean): void {
   const key = lobby?.phase === 'playing' && lobby.currentGameId ? lobby.currentGameId : 'lobby';
-  const url = plays && lobby ? songFor(key) : null;
+  const song = useMemo(() => songFor(key), [key]);
+  const url = plays && lobby ? song : null;
   useEffect(() => music.play(url), [url]);
   useEffect(() => () => music.play(null), []);
 }

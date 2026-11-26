@@ -12,6 +12,6 @@
   "durable_objects": {
     "bindings": [{ "name": "ROOMS", "class_name": "RoomDO" }]
   },
-  "vars": { "DEV_BOTS": "1" },
+  "vars": { "DEV_BOTS": "0" },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RoomDO"] }]
 }

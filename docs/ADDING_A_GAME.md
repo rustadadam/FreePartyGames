@@ -25,7 +25,7 @@ A game plugs in through one contract, `GameDefinition` in `src/core/game.ts`, an
    // src/games/registry.client.ts
    'my-game': () => import('./my-game/ui').then((m) => m.default),
    ```
-6. **Add music (optional).** Drop an MP3 named after the game id into `songs/` (`songs/my-game.mp3`). The TV, or the host's phone when there's no TV, loops it during the game; the lobby plays `songs/lobby.mp3`. A game without a file plays in silence. No code change is needed, and `tests/songs.test.ts` fails if a file's name matches no game. Kit components already make sound (timer ticks, reveal whooshes, card flicks); add a few signature cues from your game's own `sfx.ts` with `defineSfx` (see **Sound** in `docs/DESIGN.md`).
+6. **Add music (optional).** Drop an MP3 named after the game id into `songs/` (`songs/my-game.mp3`). The TV, or the host's phone when there's no TV, loops it during the game; the lobby plays one of `songs/lobby.mp3`, `songs/lobby2.mp3`, ... at random, picked again each time a game ends. A game without a file plays in silence. No code change is needed, and `tests/songs.test.ts` fails if a file's name matches no game. Kit components already make sound (timer ticks, reveal whooshes, card flicks); add a few signature cues from your game's own `sfx.ts` with `defineSfx` (see **Sound** in `docs/DESIGN.md`).
 7. **Test it.** `npm test` runs `tests/contract.test.ts` over every registered game. Add `tests/my-game.test.ts` for your game's own rules, and for any secret use `recordViews()` / `findLeaks()` from `src/core/testkit.ts`.
 8. **Play it.** `npm run build && npm run worker`, open `http://localhost:8787`, host a room, and use **Add bots**. `npm run smoke` plays every game end to end over real WebSockets.
 
