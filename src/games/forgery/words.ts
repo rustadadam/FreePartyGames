@@ -1,9 +1,9 @@
 // The type-ahead list for the forger's last-chance guess. One flat list: it deliberately has no
 // categories, so it cannot narrow the forger's guess. It must contain every word in content.ts
-// (tests/forgery.test.ts enforces that). Pure data and helpers, no imports, so the UI chunk can
-// use it without the game logic.
+// (tests/forgery.test.ts enforces that). The UI imports only this prompt data, not game logic.
+import { CATEGORIES } from './content';
 
-export const GUESS_WORDS: readonly string[] = [
+const BASE_GUESS_WORDS: readonly string[] = [
   'accordion',
   'acorn',
   'acrobat',
@@ -1064,6 +1064,8 @@ export const GUESS_WORDS: readonly string[] = [
   'zoo',
   'zucchini',
 ];
+
+export const GUESS_WORDS: readonly string[] = [...new Set([...BASE_GUESS_WORDS, ...CATEGORIES.flatMap((category) => category.words)])].sort();
 
 /** Lowercase, trimmed, single-spaced: the form a guess is compared in. */
 export function normalizeGuess(text: string): string {

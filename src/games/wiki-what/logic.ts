@@ -3,8 +3,9 @@
 //
 // Rules (also shown in the Rules text of ui.tsx):
 //  - 3 rounds of 4 questions. Each round opens with a 5-second role card on every phone (the TV
-//    only says "check your phone"). Everyone picks one of 4 choices (locked once picked).
-//  - Team answer = plurality of picks. Tie: the tied choice that was locked in first wins.
+//    only says "check your phone"). Everyone picks one of 4 choices and may revise it until the
+//    question resolves.
+//  - Team answer = plurality of picks. Tie: the tied choice whose current votes arrived first wins.
 //    No picks at all = no team answer (counts as wrong, but nobody scores for it).
 //  - Right team answer: +2 team points. Each player who picked the right choice: +1 personal.
 //  - Each round one secret Mole sees the answer. Team wrong (with an answer given): Mole +3 personal.
@@ -77,7 +78,7 @@ export interface WikiState {
   /** Mole of each round so far. */
   moles: string[];
   picks: Record<string, number>;
-  /** Pick arrival order (ties go to the earliest). */
+  /** Order of each player's latest pick (ties go to the earliest current pick). */
   order: string[];
   teamPick: number | null;
   teamRight: boolean;
@@ -314,11 +315,13 @@ export default defineGame<WikiState, WikiAction, WikiSettings>({
   onAction(s, ctx, playerId, a) {
     if (!s.playerIds.includes(playerId) || s.gone.includes(playerId)) return;
     if (a.type === 'pick') {
-      if (s.phase !== 'ask' || s.picks[playerId] !== undefined) return;
+      if (s.phase !== 'ask' || s.picks[playerId] === a.choice) return;
       s.picks[playerId] = a.choice;
+      // A changed answer becomes the player's newest locked-in choice for tie-breaking.
+      s.order = s.order.filter((id) => id !== playerId);
       s.order.push(playerId);
     } else {
-      if (s.phase !== 'accuse' || s.accuse[playerId] !== undefined) return;
+      if (s.phase !== 'accuse' || s.accuse[playerId] === a.target) return;
       if (a.target === playerId || !s.playerIds.includes(a.target)) return;
       s.accuse[playerId] = a.target;
     }

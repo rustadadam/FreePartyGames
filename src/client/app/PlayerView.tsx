@@ -1,4 +1,5 @@
 // A phone in the room: portrait, one-handed. Header stub, content, docked action.
+import { useEffect } from 'preact/hooks';
 import type { Lobby } from '../../shared/types';
 import { Avatar } from '../kit/Avatar';
 import type { RoomClient } from '../net/room';
@@ -9,15 +10,80 @@ import { Results } from './Results';
 import { RoomMenu } from './RoomMenu';
 import { ShareButton, Ticket, TicketStub } from './Ticket';
 
+// These one-column, text-and-card phone games are designed around a portrait layout.
+const PORTRAIT_GAME_IDS = new Set(['alphabet-soup', 'wiki-what', 'second-witness']);
+
 export function PlayerView({ client, lobby, view, meId }: { client: RoomClient; lobby: Lobby; view: unknown; meId: string }) {
   const isHost = client.isHost;
   const me = lobby.players.find((p) => p.id === meId);
   const game = lobby.games.find((g) => g.id === lobby.currentGameId);
   const playing = lobby.phase === 'playing';
   const seated = lobby.inGame.includes(meId);
+  const portraitGame = playing && PORTRAIT_GAME_IDS.has(game?.id ?? '');
+
+  useEffect(() => {
+    if (!portraitGame || typeof window === 'undefined') return;
+    const orientation = window.screen.orientation as (ScreenOrientation & {
+      lock?: (orientation: string) => Promise<void>;
+      unlock?: () => void;
+    }) | undefined;
+    if (!orientation?.lock) return;
+
+    let active = true;
+    let attempts = 0;
+    let inFlight = false;
+    let userActivated = false;
+    let locked = false;
+    const requestLock = () => {
+      if (!active || locked || inFlight || attempts >= 2) return;
+      attempts++;
+      inFlight = true;
+      try {
+        void orientation
+          .lock('portrait')
+          .then(() => {
+            if (!active) {
+              orientation.unlock?.();
+              return;
+            }
+            locked = true;
+          })
+          .catch(() => {
+            // Browsers that only allow locking in fullscreen/PWA mode fall back to the rotate hint.
+          })
+          .finally(() => {
+            inFlight = false;
+            if (userActivated && !locked && attempts < 2) requestLock();
+          });
+      } catch {
+        // Older browsers may expose the API but reject the request synchronously.
+        inFlight = false;
+      }
+    };
+    const requestAfterGesture = () => {
+      userActivated = true;
+      requestLock();
+      window.removeEventListener('pointerdown', requestAfterGesture);
+      window.removeEventListener('keydown', requestAfterGesture);
+    };
+    requestLock();
+    window.addEventListener('pointerdown', requestAfterGesture);
+    window.addEventListener('keydown', requestAfterGesture);
+    return () => {
+      active = false;
+      window.removeEventListener('pointerdown', requestAfterGesture);
+      window.removeEventListener('keydown', requestAfterGesture);
+      try {
+        orientation.unlock?.();
+      } catch {
+        // Ignore unsupported unlock calls during navigation.
+      }
+    };
+  }, [portraitGame]);
 
   return (
-    <div class={`view-phone phase-${lobby.phase}`}>
+    <div class={`view-phone phase-${lobby.phase}${portraitGame ? ' is-portrait-game' : ''}`}>
+      {portraitGame && <div class="portrait-overlay" role="status">Rotate your phone upright to play {game?.title ?? 'this game'}.</div>}
       <header class="phone-head">
         <TicketStub code={lobby.code} />
         <span class="phone-head-title">{playing || lobby.phase === 'results' ? (game?.title ?? '') : 'Lobby'}</span>

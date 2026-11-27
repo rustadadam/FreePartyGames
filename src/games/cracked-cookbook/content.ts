@@ -15,6 +15,10 @@ export const INGREDIENTS: readonly string[] = [
   'Rice pebble pile', 'Gravy waterfall', 'Eggplant owl', 'Kiwi eyeball', 'Pear lantern',
   'Walnut castle', 'Biscuit boulder', 'Zucchini zeppelin', 'Crouton cube', 'Jam jar sunrise',
   'Chive grass', 'Taco hammock', 'Sausage snake', 'Radish rosette', 'Mango sunset',
+  'Turnip submarine', 'Marzipan telescope', 'Caramel compass', 'Potato hot air balloon',
+  'Rhubarb windmill', 'Ravioli treasure chest', 'Peppermint kite', 'Cornbread canoe',
+  'Olive robot', 'Cookie clock', 'Mustard river', 'Blue cheese cloud', 'Apple peel dragon',
+  'Popcorn teacup', 'Fennel feather',
 ];
 
 /** Round 2: the scenery around the plate. */
@@ -29,6 +33,9 @@ export const SCENE_ELEMENTS: readonly string[] = [
   'Moon slice', 'Tiny volcano', 'Cactus', 'Palm tree', 'Mountain peak',
   'Lily pad', 'Bird feather', 'Treasure key', 'Magic wand', 'Cobweb',
   'Bat wing', 'Snowflake', 'Hot air balloon', 'Mini rainbow', 'Toadstool',
+  'Tiny telescope', 'Paper boat', 'Cinnamon stars', 'Pearl necklace', 'Gingerbread gate',
+  'Lemon flag', 'Clockwork mouse', 'Velvet curtain', 'Crystal arch', 'Comet trail',
+  'Pinecone tower', 'Soda fountain', 'Paper airplane', 'Moon balloon', 'Teapot fountain',
 ];
 
 export type Meal = 'Breakfast' | 'Lunch' | 'Dessert';
@@ -40,18 +47,24 @@ export const TWISTS: Record<Meal, readonly string[]> = {
     'in zero gravity', 'for a very small giant', 'served by robots', 'for the grumpiest cat alive',
     'eaten underwater', 'for a knight before a duel', 'during a thunderstorm', 'on top of a mountain',
     'for a ghost who forgot to haunt', 'for a time traveler', 'at a tiny circus', 'for a wizard with no spoon',
+    'for a mermaid with stage fright', 'at a cloud-top cafe', 'for a sleepy volcano', 'during a toy parade',
+    'for a knight who hates crumbs', 'on a train to the moon', 'for a penguin detective', 'inside a snow globe',
   ],
   Lunch: [
     'for a troll under a bridge', 'in a treehouse', 'packed for a snowman', 'for a detective on a stakeout',
     'at the bottom of the sea', 'for a band on tour', 'for a sun-baked cactus', 'for a bored king',
     'on a floating island', 'for an alien visiting Earth', 'for a mermaid picnic', 'inside a giant boot',
     'for a yeti on holiday', 'in a haunted lighthouse', 'at a robot disco', 'for a fox in a hurry',
+    'for a dragon librarian', 'on a floating market', 'for a nervous astronaut', 'inside a giant teapot',
+    'for a family of ghosts', 'at the bottom of a well', 'for a very tiny king', 'during a rain of stars',
   ],
   Dessert: [
     'for the queen of the moon', 'that fights back', 'for a sleepy volcano', 'for a birthday on Mars',
     'for a dragon hoard', 'for a very polite monster', 'inside a snow globe', 'for a cloud giant',
     'that glows in the dark', 'for a haunted bakery', 'for a pirate feast', 'for a bear who loves honey',
     'for the last day of summer', 'hidden inside a pie', 'for a snowman wedding', 'for a dinosaur sweet tooth',
+    'for a moonbeam picnic', 'at a backwards bakery', 'for a homesick robot', 'inside a pirate telescope',
+    'for a sleepy sea monster', 'that tells a secret', 'for a garden full of gnomes', 'at the edge of a rainbow',
   ],
 };
 

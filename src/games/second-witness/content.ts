@@ -202,6 +202,23 @@ const RAW: [string, ...string[]][] = [
   ['Colors of hair in Relief Society', 'Blonde', 'Brunette', 'Red', 'Gray', 'Black'],
   ['Tie patterns', 'Stripes', 'Solid', 'Paisley', 'Polka dots', 'Plaid'],
   ['Ways to greet someone', 'Hello', 'Hi', 'Handshake', 'Hug', 'Wave', 'Smile'],
+
+  // More prompts for a fresh mix of scripture, ward, family and youth-life answers.
+  ['Things you see at a temple open house', 'Baptistry', 'Celestial room', 'Sealing room', 'Chandelier', 'Waiting area', 'Spiral staircase'],
+  ['Items for family scripture study', 'Scriptures', 'Notebook', 'Pencil', 'Reading glasses', 'Bookmark', 'Study guide'],
+  ['Things you might see in a Primary lesson', 'Pictures of Jesus', 'Scripture story', 'Coloring page', 'Songbook', 'Whiteboard', 'Flannel board'],
+  ['Family history discoveries', 'Birth record', 'Old photograph', 'Census page', 'Immigration record', 'Family story', 'Marriage certificate'],
+  ['Things youth bring to camp', 'Sleeping bag', 'Flashlight', 'Water bottle', 'Hiking shoes', 'Sunscreen', 'Bug spray'],
+  ['Pioneer handcart supplies', 'Flour sack', 'Cooking pot', 'Blanket', 'Water barrel', 'Sewing kit', 'Walking stick'],
+  ['Things people do on Fast Sunday', 'Skip a meal', 'Pray', 'Share a testimony', 'Donate a fast offering', 'Drink water', 'Attend church'],
+  ['Church building maintenance chores', 'Vacuum the chapel', 'Empty trash cans', 'Wipe the tables', 'Mow the lawn', 'Shovel the sidewalk', 'Arrange chairs'],
+  ['Reasons a Sunday lesson runs long', 'Many questions', 'A long story', 'Late start', 'Interesting discussion', 'Extra announcements'],
+  ['Things on a missionary name tag', 'Missionary name', 'Church name', 'Country flag', 'First name', 'Jesus Christ'],
+  ['Foods at a ward potluck', 'Funeral potatoes', 'Green salad', 'Rolls', 'Chili', 'Brownies', 'Fruit salad'],
+  ['Things to pack for a temple trip', 'Temple clothes', 'Recommend', 'Hairbrush', 'Water bottle', 'Church shoes', 'Scriptures'],
+  ['Common family history interview questions', 'Where were you born', 'What was your first job', 'How did you meet', 'What was your home like', 'What do you remember about school'],
+  ['Things a youth leader might bring', 'Attendance list', 'Snacks', 'First aid kit', 'Activity plan', 'Scriptures', 'Name tags'],
+  ['Reasons a ward activity gets rescheduled', 'Snowstorm', 'Building repair', 'Low attendance', 'Power outage', 'Schedule conflict'],
 ];
 
 function slug(text: string): string {

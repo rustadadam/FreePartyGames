@@ -14,12 +14,33 @@
 
 /* The bowl: letters float above a rim drawn in the group color. */
 .as-bowl {
-  position: relative;
+  position: sticky;
+  top: calc(var(--safe-t) + 50px);
+  z-index: 8;
   display: grid;
   justify-items: center;
   gap: var(--s4);
   padding: var(--s5) var(--s3) var(--s7);
   margin-top: var(--s3);
+  background: var(--bg);
+  scroll-margin-top: calc(var(--safe-t) + 50px);
+}
+.as-phone:focus-within .as-bowl {
+  gap: var(--s1);
+  padding: var(--s2) var(--s3) var(--s3);
+  margin-top: 0;
+}
+.as-phone:focus-within .as-bowl .as-noodles {
+  gap: var(--s2);
+}
+.as-phone:focus-within .as-bowl .as-noodle {
+  width: min(14vw, 58px);
+  border-width: 2px;
+  font-size: min(10vw, 42px);
+}
+.as-phone:focus-within .as-rim {
+  height: 18px;
+  border-width: 3px;
 }
 .as-rim {
   position: absolute;

@@ -193,7 +193,11 @@ function Player({ view, send, lobby, me }: PlayerProps<WikiView, WikiAction>) {
 
       {view.phase === 'ask' && q && (
         <>
-          <p class="g-muted">{you?.pick != null ? `Locked in. Waiting for ${waiting} more.` : 'Pick an answer. The most popular pick becomes the team answer.'}</p>
+          <p class="g-muted">
+            {you?.pick != null
+              ? `Your answer is in. Tap another choice to change it. Waiting for ${waiting} more.`
+              : 'Pick an answer. You can change it while the question is open.'}
+          </p>
           <div class="g-panel ww-q">
             <p class="ww-q-text">{q.text}</p>
           </div>
@@ -203,7 +207,7 @@ function Player({ view, send, lobby, me }: PlayerProps<WikiView, WikiAction>) {
                 key={i}
                 i={i}
                 text={c}
-                state={you?.pick === i ? 'mine' : you?.pick != null ? 'locked' : 'open'}
+                state={you?.pick === i ? 'mine' : 'open'}
                 // Only the Mole's view carries this: the right answer, tagged on the card itself.
                 tip={you?.answerIndex === i ? 'Right answer' : undefined}
                 onPick={() => send({ type: 'pick', choice: i })}
@@ -234,9 +238,10 @@ function Player({ view, send, lobby, me }: PlayerProps<WikiView, WikiAction>) {
             label="Who is the Mole?"
             value={you?.accused ?? null}
             onVote={(id) => send({ type: 'accuse', target: id })}
+            changeable
             options={others.map((id) => ({ id, label: playerOf(lobby, id)?.name ?? '?', color: playerOf(lobby, id)?.color }))}
           />
-          {you?.accused != null && <p class="g-muted">Locked in. Waiting for {waiting} more.</p>}
+          {you?.accused != null && <p class="g-muted">Tap another player to change your accusation. Waiting for {waiting} more.</p>}
         </>
       )}
 
@@ -306,10 +311,10 @@ function Rules() {
       story="In the strangest corners of Wikipedia, there is a quiz your team has to pass. You are all working together, except for one of you. The Mole already knows the answers, and wants you to get them wrong."
       how={[
         'Each round opens with a secret role card on your phone: you are on the team, or you are the Mole. Check it, then keep your face still.',
-        'The team answers strange-but-true questions from Wikipedia. Everyone picks an answer.',
-        'The team answer is the most popular pick. If it is tied, the choice locked in first wins.',
+        'The team answers strange-but-true questions from Wikipedia. Everyone picks an answer and can change it while the question is open.',
+        'The team answer is the most popular pick. If it is tied, the tied choice whose current votes arrived first wins.',
         'The Mole sees the right answer, marked on their own screen, and wants the team to get it wrong.',
-        'At the end of the round, everyone accuses a player. The Mole accuses someone too, to blend in, but that accusation does not count. The player with the most accusations is caught. If it is tied, nobody is.',
+        'At the end of the round, everyone accuses a player and can change their choice while accusations are open. The Mole accuses someone too, to blend in, but that accusation does not count. The player with the most accusations is caught. If it is tied, nobody is.',
         'After each answer and each Mole reveal, your phone lists where your points came from.',
       ]}
       scoring={[

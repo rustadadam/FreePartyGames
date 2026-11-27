@@ -71,8 +71,18 @@ function blank<T>(v: T): T[] {
 /** One bar of groove. Busier with level; `fill` adds a snare run at the end of a phrase. */
 function makeGroove(rng: Rng, level: number, fill: boolean): Groove {
   const g: Groove = { kick: blank(false), snare: blank(false), hat: blank(false), open: blank(false), bass: blank(-1) };
-  g.kick[0] = g.kick[8] = true;
-  g.snare[4] = g.snare[12] = true;
+  // Choose a drum pocket so each generated song has a different rhythmic starting point.
+  const pocket = rng.int(3);
+  if (pocket === 0) {
+    g.kick[0] = g.kick[8] = true;
+    g.snare[4] = g.snare[12] = true;
+  } else if (pocket === 1) {
+    g.kick[0] = g.kick[6] = g.kick[8] = g.kick[14] = true;
+    g.snare[4] = g.snare[12] = true;
+  } else {
+    g.kick[0] = g.kick[7] = g.kick[10] = true;
+    g.snare[3] = g.snare[11] = true;
+  }
   const extraKicks = [3, 6, 10, 11, 14];
   const nKick = Math.min(extraKicks.length, 1 + level + rng.int(2));
   for (const s of rng.shuffle(extraKicks).slice(0, nKick)) g.kick[s] = true;
@@ -113,17 +123,24 @@ export function makeChart(seed: number, levelIn: number): Chart {
   const bars = Math.max(8, Math.min(20, Math.round(TARGET_SONG_MS / barMs / 4) * 4));
   const root = 36 + rng.int(0, 7);
 
-  // Two grooves (A, B) and their fill variants; phrases of four bars: A A B A-fill.
+  // Two grooves (A, B) and their fill variants. Pick a four-bar arrangement for the song.
   const A = makeGroove(rng, level, false);
   const B = makeGroove(rng, level, false);
   const Af = makeGroove(rng, level, true);
   const Bf = makeGroove(rng, level, true);
+  const arrangements = [
+    [0, 0, 1, 2], // A A B A-fill
+    [0, 1, 0, 3], // A B A B-fill
+    [1, 0, 1, 3], // B A B B-fill
+    [0, 1, 1, 2], // A B B A-fill
+  ] as const;
+  const arrangement = rng.pick(arrangements);
+  const inverted = rng.chance(0.5);
+  const grooves = [A, B, Af, Bf];
   const order = (bar: number): Groove => {
-    const inPhrase = bar % 4;
-    const odd = Math.floor(bar / 4) % 2 === 1;
-    if (inPhrase === 3) return odd ? Bf : Af;
-    if (inPhrase === 2) return odd ? A : B;
-    return odd ? B : A;
+    let slot = arrangement[bar % 4];
+    if (inverted) slot = slot === 0 ? 1 : slot === 1 ? 0 : slot === 2 ? 3 : 2;
+    return grooves[slot];
   };
 
   const kick: number[] = [];

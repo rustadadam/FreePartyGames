@@ -16,6 +16,8 @@ export interface RoomState {
   status: ConnStatus;
   /** Failed attempts since the socket was last open. */
   attempt: number;
+  /** Player actions waiting for a connection, limited to the short reconnect window. */
+  pendingActions: number;
   you: Viewer | null;
   lobby: Lobby | null;
   view: unknown;
@@ -36,6 +38,9 @@ const PROBE_MS = 5_000;
 const FORGET_SEAT: ReadonlySet<EndReason> = new Set(['kicked', 'left', 'gone', 'full', 'screen_taken']);
 /** After this many failed attempts, ask the API whether the room still exists. */
 const CHECK_GONE_AFTER = 3;
+/** Taps made during a brief reconnect are useful; stale game actions are not. */
+const ACTION_QUEUE_MS = 10_000;
+const MAX_QUEUED_ACTIONS = 16;
 const FATAL_HELLO: Partial<Record<ErrorCode, EndReason>> = {
   room_full: 'full',
   screen_taken: 'screen_taken',
@@ -49,7 +54,7 @@ export function wsUrl(code: string): string {
 
 export class RoomClient {
   readonly clock = new ServerClock();
-  state: RoomState = { status: 'connecting', attempt: 0, you: null, lobby: null, view: null, ended: null, notice: null };
+  state: RoomState = { status: 'connecting', attempt: 0, pendingActions: 0, you: null, lobby: null, view: null, ended: null, notice: null };
 
   private ws: WebSocket | null = null;
   private token: string | undefined;
@@ -61,6 +66,8 @@ export class RoomClient {
   private lastHeard = 0;
   private probeTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
+  private queuedActions: { payload: unknown; expiresAt: number }[] = [];
+  private queueTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     readonly code: string,
@@ -88,7 +95,14 @@ export class RoomClient {
   }
 
   action(payload: unknown): void {
-    this.send({ type: 'action', payload });
+    const msg = { type: 'action', payload } as const;
+    if (this.ws?.readyState === WebSocket.OPEN) return this.send(msg);
+    // Live performance/drawing updates expire immediately and should never delay play.
+    if (isTransientAction(payload) || !this.state.you || this.state.ended) return;
+    if (this.queuedActions.length === MAX_QUEUED_ACTIONS) this.queuedActions.shift();
+    this.queuedActions.push({ payload, expiresAt: Date.now() + ACTION_QUEUE_MS });
+    this.set({ pendingActions: this.queuedActions.length });
+    this.scheduleQueueExpiry();
   }
 
   host(cmd: HostCmd): void {
@@ -114,6 +128,7 @@ export class RoomClient {
     removeEventListener('online', this.nudge);
     document.removeEventListener('visibilitychange', this.nudge);
     this.clearTimers();
+    this.clearQueue();
     assetCache.setRequester(null);
     const ws = this.ws;
     this.ws = null;
@@ -153,6 +168,9 @@ export class RoomClient {
       if (ev.code === 4000 && (ev.reason === 'kicked' || ev.reason === 'replaced')) return this.end(ev.reason);
       this.scheduleRetry();
     };
+    ws.onerror = () => {
+      if (this.ws === ws) this.dropSocket();
+    };
   }
 
   private handle(msg: ServerMsg): void {
@@ -163,6 +181,7 @@ export class RoomClient {
         this.clock.seed(msg.serverNow);
         assetCache.setRequester((ids) => this.send({ type: 'assetReq', ids }));
         this.set({ status: 'open', attempt: 0, you: msg.you });
+        this.flushActions();
         this.pingsSent = 0;
         this.ping();
         return;
@@ -259,6 +278,7 @@ export class RoomClient {
     if (this.state.ended) return;
     if (FORGET_SEAT.has(reason)) clearSession(this.code);
     this.clearTimers();
+    this.clearQueue();
     this.set({ status: 'ended', ended: reason });
     const ws = this.ws;
     this.ws = null;
@@ -272,6 +292,36 @@ export class RoomClient {
     this.retryTimer = this.pingTimer = this.probeTimer = null;
   }
 
+  /** Send only actions that were never handed to a socket, and only after a brief outage. */
+  private flushActions(): void {
+    const now = Date.now();
+    const pending = this.queuedActions.filter((item) => item.expiresAt > now);
+    this.queuedActions = [];
+    this.scheduleQueueExpiry();
+    this.set({ pendingActions: 0 });
+    for (const item of pending) this.send({ type: 'action', payload: item.payload });
+  }
+
+  private scheduleQueueExpiry(): void {
+    if (this.queueTimer) clearTimeout(this.queueTimer);
+    this.queueTimer = null;
+    if (!this.queuedActions.length) return;
+    const delay = Math.max(0, this.queuedActions[0].expiresAt - Date.now());
+    this.queueTimer = setTimeout(() => {
+      this.queueTimer = null;
+      const now = Date.now();
+      this.queuedActions = this.queuedActions.filter((item) => item.expiresAt > now);
+      this.set({ pendingActions: this.queuedActions.length });
+      this.scheduleQueueExpiry();
+    }, delay);
+  }
+
+  private clearQueue(): void {
+    if (this.queueTimer) clearTimeout(this.queueTimer);
+    this.queueTimer = null;
+    this.queuedActions = [];
+  }
+
   private send(msg: ClientMsgInput): void {
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
   }
@@ -280,4 +330,10 @@ export class RoomClient {
     this.state = { ...this.state, ...patch };
     for (const fn of this.listeners) fn();
   }
+}
+
+function isTransientAction(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  const type = (payload as { type?: unknown }).type;
+  return type === 'live' || type === 'ink';
 }

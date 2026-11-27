@@ -469,6 +469,25 @@ button.host-option:active:not(:disabled) {
   flex-direction: column;
   min-height: 100dvh;
 }
+.portrait-overlay {
+  display: none;
+}
+@media (orientation: landscape) {
+  .view-phone.is-portrait-game .portrait-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding: var(--s6);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-display);
+    font-size: var(--t-xl);
+    line-height: 1.2;
+    text-align: center;
+  }
+}
 .phone-head {
   position: sticky;
   top: 0;
