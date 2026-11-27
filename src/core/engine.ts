@@ -97,8 +97,12 @@ export interface RoomSnapshot {
   gameRng: number;
   botRng: number;
   nextSeat: number;
+  /** Recent acknowledged player actions, keyed by seat, so retries after reconnect are harmless. */
+  recentActionIds?: Record<string, string[]>;
   version: number;
 }
+
+const ACTION_RECEIPTS_PER_PLAYER = 32;
 
 function defaultToken(): string {
   const bytes = new Uint8Array(18);
@@ -146,6 +150,7 @@ export class Room {
       gameRng: 0,
       botRng: (seed ^ 0x9e3779b9) >>> 0,
       nextSeat: 1,
+      recentActionIds: {},
       version: 0,
     };
     this.rng = new Rng(this.s.rng);
@@ -157,6 +162,7 @@ export class Room {
   static restore(snapshot: RoomSnapshot, deps: RoomDeps, assets?: Iterable<[string, unknown]>): Room {
     const room = new Room(deps, structuredClone(snapshot));
     room.s.settings ??= {}; // snapshots from before game settings
+    room.s.recentActionIds ??= {};
     for (const [id, data] of assets ?? []) room.assets.set(id, data);
     return room;
   }
@@ -333,9 +339,16 @@ export class Room {
         return this.sendAssets(connId, msg.ids);
       case 'action': {
         if (who.kind !== 'player') return this.error(connId, 'not_in_game', 'Screens cannot act');
+        if (msg.id && this.hasActionReceipt(who.id, msg.id)) {
+          this.deps.send(connId, { type: 'actionAck', id: msg.id });
+          return;
+        }
+        if (msg.id) this.rememberAction(who.id, msg.id);
         const err = this.playerAction(who.id, msg.payload);
         if (err) this.error(connId, err.code, err.message);
-        return this.commit();
+        this.commit();
+        if (msg.id) this.deps.send(connId, { type: 'actionAck', id: msg.id });
+        return;
       }
       case 'host': {
         if (!this.isHost(who)) return this.error(connId, 'not_host', 'Only the host can do that');
@@ -470,7 +483,10 @@ export class Room {
     if (!seat) return;
     seat.away = true;
     this.playerGone(id); // before removal, so host passes to the next seat in order
-    if (!keepSeat) this.s.seats = this.s.seats.filter((p) => p !== seat);
+    if (!keepSeat) {
+      this.s.seats = this.s.seats.filter((p) => p !== seat);
+      delete this.s.recentActionIds?.[id];
+    }
   }
 
   private drop(connId: string, code: ErrorCode, message: string): void {
@@ -811,6 +827,17 @@ export class Room {
 
   private error(connId: string, code: ErrorCode, message: string): void {
     this.deps.send(connId, { type: 'error', code, message: message.slice(0, 200) });
+  }
+
+  private hasActionReceipt(playerId: string, id: string): boolean {
+    return this.s.recentActionIds?.[playerId]?.includes(id) ?? false;
+  }
+
+  private rememberAction(playerId: string, id: string): void {
+    const receipts = (this.s.recentActionIds ??= {});
+    const ids = (receipts[playerId] ??= []);
+    ids.push(id);
+    if (ids.length > ACTION_RECEIPTS_PER_PLAYER) ids.splice(0, ids.length - ACTION_RECEIPTS_PER_PLAYER);
   }
 
   // ---------- helpers ----------

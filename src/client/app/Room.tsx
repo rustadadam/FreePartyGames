@@ -87,7 +87,7 @@ function ReconnectBanner({ state }: { state: RoomState }) {
       <span class="banner-dot" aria-hidden="true" />
       <span>
         Reconnecting{state.attempt > 2 ? ` (try ${state.attempt})` : ''}… your seat is saved.
-        {state.pendingActions > 0 && ` Sending ${state.pendingActions} queued ${state.pendingActions === 1 ? 'action' : 'actions'} when reconnected.`}
+        {state.pendingActions > 0 && ` Sending ${state.pendingActions} pending ${state.pendingActions === 1 ? 'action' : 'actions'} when reconnected.`}
       </span>
     </div>
   );

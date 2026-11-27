@@ -47,7 +47,7 @@ export const ClientMsgSchema = z.discriminatedUnion('type', [
       role: z.enum(['player', 'screen']),
     })
     .strict(),
-  z.object({ type: z.literal('action'), payload: z.unknown() }).strict(),
+  z.object({ type: z.literal('action'), payload: z.unknown(), id: z.string().uuid().optional() }).strict(),
   z.object({ type: z.literal('host'), cmd: HostCmdSchema }).strict(),
   z.object({ type: z.literal('ping'), c: z.number().finite() }).strict(),
   z.object({ type: z.literal('assetReq'), ids: z.array(Id).max(MAX_ASSET_REQ) }).strict(),
@@ -82,6 +82,7 @@ export type ServerMsg =
   | { type: 'ephemeral'; payload: unknown }
   | { type: 'assets'; items: Record<string, unknown> }
   | { type: 'pong'; c: number; s: number }
+  | { type: 'actionAck'; id: string }
   | { type: 'error'; code: ErrorCode; message: string };
 
 export type ServerMsgOf<T extends ServerMsg['type']> = Extract<ServerMsg, { type: T }>;

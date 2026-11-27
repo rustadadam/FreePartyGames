@@ -3,6 +3,7 @@
 // through subscribe(); it never touches the socket.
 import type { ClientMsgInput, ErrorCode, HostCmd, ServerMsg } from '../../shared/protocol';
 import type { Lobby, Role, Viewer } from '../../shared/types';
+import { ActionOutbox } from './actionOutbox';
 import { assetCache } from './assets';
 import { ServerClock, localNow } from './clock';
 import { clearSession, saveSession } from './session';
@@ -16,14 +17,14 @@ export interface RoomState {
   status: ConnStatus;
   /** Failed attempts since the socket was last open. */
   attempt: number;
-  /** Player actions waiting for a connection, limited to the short reconnect window. */
+  /** Player actions sent or waiting for a connection, until acknowledged or expired. */
   pendingActions: number;
   you: Viewer | null;
   lobby: Lobby | null;
   view: unknown;
   ended: EndReason | null;
   /** Last non-fatal server error, for a toast. `at` changes on each error. */
-  notice: { code: ErrorCode; message: string; at: number } | null;
+  notice: { code: ErrorCode | 'delivery_timeout'; message: string; at: number } | null;
 }
 
 const BACKOFF_MS = [400, 1000, 2000, 4000, 8000];
@@ -38,9 +39,6 @@ const PROBE_MS = 5_000;
 const FORGET_SEAT: ReadonlySet<EndReason> = new Set(['kicked', 'left', 'gone', 'full', 'screen_taken']);
 /** After this many failed attempts, ask the API whether the room still exists. */
 const CHECK_GONE_AFTER = 3;
-/** Taps made during a brief reconnect are useful; stale game actions are not. */
-const ACTION_QUEUE_MS = 10_000;
-const MAX_QUEUED_ACTIONS = 16;
 const FATAL_HELLO: Partial<Record<ErrorCode, EndReason>> = {
   room_full: 'full',
   screen_taken: 'screen_taken',
@@ -66,8 +64,7 @@ export class RoomClient {
   private lastHeard = 0;
   private probeTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
-  private queuedActions: { payload: unknown; expiresAt: number }[] = [];
-  private queueTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly outbox: ActionOutbox;
 
   constructor(
     readonly code: string,
@@ -76,6 +73,18 @@ export class RoomClient {
     token?: string,
   ) {
     this.token = token;
+    this.outbox = new ActionOutbox(
+      (id, payload) => this.sendAction(id, payload),
+      (pendingActions) => this.set({ pendingActions }),
+      () =>
+        this.set({
+          notice: {
+            code: 'delivery_timeout',
+            message: 'Could not confirm that action. Check the game before tapping again.',
+            at: Date.now(),
+          },
+        }),
+    );
     addEventListener('online', this.nudge);
     document.addEventListener('visibilitychange', this.nudge);
     this.connect();
@@ -95,14 +104,9 @@ export class RoomClient {
   }
 
   action(payload: unknown): void {
-    const msg = { type: 'action', payload } as const;
-    if (this.ws?.readyState === WebSocket.OPEN) return this.send(msg);
-    // Live performance/drawing updates expire immediately and should never delay play.
-    if (isTransientAction(payload) || !this.state.you || this.state.ended) return;
-    if (this.queuedActions.length === MAX_QUEUED_ACTIONS) this.queuedActions.shift();
-    this.queuedActions.push({ payload, expiresAt: Date.now() + ACTION_QUEUE_MS });
-    this.set({ pendingActions: this.queuedActions.length });
-    this.scheduleQueueExpiry();
+    if (this.state.ended) return;
+    if (isTransientAction(payload)) return this.send({ type: 'action', payload });
+    this.outbox.submit(payload);
   }
 
   host(cmd: HostCmd): void {
@@ -128,7 +132,7 @@ export class RoomClient {
     removeEventListener('online', this.nudge);
     document.removeEventListener('visibilitychange', this.nudge);
     this.clearTimers();
-    this.clearQueue();
+    this.outbox.dispose();
     assetCache.setRequester(null);
     const ws = this.ws;
     this.ws = null;
@@ -181,7 +185,7 @@ export class RoomClient {
         this.clock.seed(msg.serverNow);
         assetCache.setRequester((ids) => this.send({ type: 'assetReq', ids }));
         this.set({ status: 'open', attempt: 0, you: msg.you });
-        this.flushActions();
+        this.outbox.reconnected();
         this.pingsSent = 0;
         this.ping();
         return;
@@ -196,6 +200,8 @@ export class RoomClient {
         return assetCache.receive(msg.items);
       case 'pong':
         return this.clock.sample(msg.c, msg.s);
+      case 'actionAck':
+        return this.outbox.acknowledge(msg.id);
       case 'error': {
         const fatal = this.state.status !== 'open' ? FATAL_HELLO[msg.code] : undefined;
         if (fatal) return this.end(fatal);
@@ -278,7 +284,7 @@ export class RoomClient {
     if (this.state.ended) return;
     if (FORGET_SEAT.has(reason)) clearSession(this.code);
     this.clearTimers();
-    this.clearQueue();
+    this.outbox.dispose();
     this.set({ status: 'ended', ended: reason });
     const ws = this.ws;
     this.ws = null;
@@ -292,34 +298,16 @@ export class RoomClient {
     this.retryTimer = this.pingTimer = this.probeTimer = null;
   }
 
-  /** Send only actions that were never handed to a socket, and only after a brief outage. */
-  private flushActions(): void {
-    const now = Date.now();
-    const pending = this.queuedActions.filter((item) => item.expiresAt > now);
-    this.queuedActions = [];
-    this.scheduleQueueExpiry();
-    this.set({ pendingActions: 0 });
-    for (const item of pending) this.send({ type: 'action', payload: item.payload });
-  }
-
-  private scheduleQueueExpiry(): void {
-    if (this.queueTimer) clearTimeout(this.queueTimer);
-    this.queueTimer = null;
-    if (!this.queuedActions.length) return;
-    const delay = Math.max(0, this.queuedActions[0].expiresAt - Date.now());
-    this.queueTimer = setTimeout(() => {
-      this.queueTimer = null;
-      const now = Date.now();
-      this.queuedActions = this.queuedActions.filter((item) => item.expiresAt > now);
-      this.set({ pendingActions: this.queuedActions.length });
-      this.scheduleQueueExpiry();
-    }, delay);
-  }
-
-  private clearQueue(): void {
-    if (this.queueTimer) clearTimeout(this.queueTimer);
-    this.queueTimer = null;
-    this.queuedActions = [];
+  private sendAction(id: string, payload: unknown): boolean {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    try {
+      ws.send(JSON.stringify({ type: 'action', id, payload }));
+      return true;
+    } catch {
+      if (this.ws === ws) this.dropSocket();
+      return false;
+    }
   }
 
   private send(msg: ClientMsgInput): void {
